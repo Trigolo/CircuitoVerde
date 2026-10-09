@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CircuitoVerde</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="logo">♻</span>
+      <div>
+        <strong>CircuitoVerde</strong>
+        <small>Economia circular de resíduos eletrônicos</small>
+      </div>
+    </div>
+    <nav id="menu"></nav>
+    <div id="sessao"></div>
+  </header>
+
+  <div id="aviso" class="aviso escondido"></div>
+
+  <main id="conteudo"></main>
+
+  <!-- Janela modal reutilizável -->
+  <div id="modal" class="modal escondido" role="dialog" aria-modal="true">
+    <div class="modal-caixa">
+      <button class="fechar" id="modal-fechar" aria-label="Fechar">×</button>
+      <div id="modal-corpo"></div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
