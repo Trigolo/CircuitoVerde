@@ -4,8 +4,6 @@
 
 Projeto da **A3 de Banco de Dados** (tema 12 – Soluções em Banco de Dados para Sustentabilidade).
 
-**Equipe:** Gustavo Trigolo dos Santos · Mauricio Walazak
-
 ---
 
 ## Problema
