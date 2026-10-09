@@ -1,13 +1,17 @@
 // Ponto de entrada da API CircuitoVerde
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const pool = require('./db');
 const tratarErros = require('./middlewares/erros');
 
 const app = express();
-app.use(cors());           // libera o acesso do frontend
-app.use(express.json());   // lê o corpo das requisições em JSON
+app.use(cors());
+app.use(express.json());
+
+// Entrega o frontend (site) em http://localhost:3000
+app.use(express.static(path.join(__dirname, '..', '..', 'circuitoverde-frontend')));
 
 // Verificação rápida: a API está no ar e conversa com o banco?
 app.get('/api/saude', async (req, res, next) => {
