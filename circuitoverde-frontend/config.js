@@ -1,2 +1,2 @@
-// Endereço da API. Quando publicar na Oracle Cloud, troque pelo endereço do servidor.
-window.API_URL = 'http://localhost:3000/api';
+// Aberto pelo arquivo (duplo clique) usa localhost:3000; servido pela API usa o mesmo endereço
+window.API_URL = location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
