@@ -27,7 +27,9 @@ function dataBR(s) {
   return `${dia}/${m}/${a}${h ? ' ' + h.slice(0, 5) : ''}`;
 }
 function kg(n) {
-  return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 });
+  const v = Number(n || 0);
+  const casas = v >= 100 ? 0 : v >= 1 ? 1 : 3;   // números grandes sem casas decimais
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 }
 function reais(n) {
   return Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -167,7 +169,7 @@ async function painel() {
         <h2>Tempo médio da logística reversa</h2>
         <table>
           <tr><th>Reciclador</th><th class="num">Coletas</th><th class="num">Dias</th></tr>
-          ${d.tempo_logistica.map((x) => `<tr><td>${esc(x.reciclador)}</td><td class="num">${x.coletas_entregues}</td><td class="num">${String(x.dias_medios).replace('.', ',')}</td></tr>`).join('')}
+          ${d.tempo_logistica.map((x) => `<tr><td>${esc(x.reciclador)}</td><td class="num">${x.coletas_entregues}</td><td class="num">${Number(x.dias_medios).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td></tr>`).join('')}
         </table>
       </div>
     </div>`;
