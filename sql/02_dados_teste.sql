@@ -96,7 +96,8 @@ INSERT INTO logistica_reversa (id_item, id_reciclador, data_solicitacao) VALUES
  (4, 1, '2026-09-10 10:00:00');
 
 -- Avanço dos status (cada UPDATE gera uma linha em status_logistica)
-UPDATE logistica_reversa SET status = 'AGENDADA', id_transportador = 1, data_agendada = '2026-09-05 09:00:00', rota = 'Centro > Água Verde > CIC' WHERE id_logistica IN (2, 3, 4);
+UPDATE logistica_reversa SET status = 'AGENDADA', id_transportador = 1, data_agendada = '2026-09-05 09:00:00', rota = 'Centro > Água Verde > CIC' WHERE id_logistica IN (2, 3);
+UPDATE logistica_reversa SET status = 'AGENDADA', id_transportador = 1, data_agendada = '2026-09-11 09:00:00', rota = 'Centro > CIC' WHERE id_logistica = 4;
 UPDATE logistica_reversa SET status = 'EM_TRANSITO' WHERE id_logistica IN (2, 4);
 UPDATE logistica_reversa SET status = 'ENTREGUE', data_entrega = '2026-09-06 16:00:00' WHERE id_logistica = 2;
 UPDATE logistica_reversa SET status = 'ENTREGUE', data_entrega = '2026-09-12 11:00:00' WHERE id_logistica = 4;
