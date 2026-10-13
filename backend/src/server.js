@@ -7,8 +7,8 @@ const pool = require('./db');
 const tratarErros = require('./middlewares/erros');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors());           // libera o acesso do frontend
+app.use(express.json());   // lê o corpo das requisições em JSON
 
 // Entrega o frontend (site) em http://localhost:3000
 app.use(express.static(path.join(__dirname, '..', '..', 'circuitoverde-frontend')));
