@@ -4,6 +4,8 @@
 
 Projeto da **A3 de Banco de Dados** (tema 12 – Soluções em Banco de Dados para Sustentabilidade).
 
+**Equipe:** Gustavo Trigolo dos Santos · Mauricio Walazak
+
 ---
 
 ## Problema
@@ -27,8 +29,11 @@ sql/
   01_schema.sql        criação do banco: tabelas, constraints, índices, triggers, procedure e views
   02_dados_teste.sql   dados fictícios para testes
   03_consultas.sql     consultas para relatórios e testes de integridade
+  04_carga_massa.sql   carga em massa: 14 pontos de coleta, ~80 geradores, ~500 itens em 12 meses
 backend/
-  API REST em Node.js + Express conectada ao MySQL
+  API REST em Node.js + Express conectada ao MySQL (também entrega o site)
+circuitoverde-frontend/
+  site em HTML, CSS e JavaScript puro
 ```
 
 ## Banco de dados
@@ -47,7 +52,7 @@ backend/
 
 ### Banco
 1. Abra o MySQL Workbench e conecte ao seu servidor MySQL 8.
-2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/03_consultas.sql`.
+2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa) e `sql/03_consultas.sql`.
 
 ### API
 ```bash
@@ -55,8 +60,10 @@ cd backend
 npm install
 # copie .env.example para .env e preencha a senha do MySQL
 npm run senhas   # define a senha 123456 para os usuários de teste
-npm run dev      # API em http://localhost:3000
+npm run dev      # API e site em http://localhost:3000
 ```
+
+Abra `http://localhost:3000` no navegador para usar o sistema.
 
 Teste em `http://localhost:3000/api/saude`. O arquivo `backend/requests.http` tem o fluxo completo para testar com a extensão REST Client do VS Code.
 
@@ -77,6 +84,7 @@ Teste em `http://localhost:3000/api/saude`. O arquivo `backend/requests.http` te
 
 ## Próximos passos
 
-- [ ] Frontend web
+- [x] Frontend web
+- [x] Carga de dados em massa
 - [ ] Script de segurança (papéis e permissões no MySQL)
 - [ ] Deploy na Oracle Cloud (OCI)
