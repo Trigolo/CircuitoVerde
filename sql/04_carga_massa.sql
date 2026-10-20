@@ -231,7 +231,7 @@ BEGIN
       END IF;
       SELECT id_transportador INTO v_transp FROM transportador ORDER BY RAND() LIMIT 1;
 
-      SET v_solic   = v_descarte + INTERVAL FLOOR(RAND()*72) HOUR;
+      SET v_solic   = LEAST(v_hoje - INTERVAL 30 MINUTE, v_descarte + INTERVAL FLOOR(RAND()*72) HOUR);
       SET v_agenda  = DATE(v_solic) + INTERVAL FLOOR(1 + RAND()*5) DAY + INTERVAL FLOOR(8 + RAND()*9) HOUR;
       SET v_entrega = v_agenda + INTERVAL FLOOR(2 + RAND()*96) HOUR;
 

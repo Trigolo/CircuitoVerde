@@ -4,7 +4,7 @@
 
 Projeto da **A3 de Banco de Dados** (tema 12 – Soluções em Banco de Dados para Sustentabilidade).
 
-**Equipe:** Gustavo Trigolo dos Santos · Mauricio Walazak
+**Equipe:** Gustavo Trigolo dos Santos · Mauricio Walazak · Vinicius Viera Radke
 
 ---
 
@@ -30,6 +30,9 @@ sql/
   02_dados_teste.sql   dados fictícios para testes
   03_consultas.sql     consultas para relatórios e testes de integridade
   04_carga_massa.sql   carga em massa: 14 pontos de coleta, ~80 geradores, ~500 itens em 12 meses
+  05_views_dashboard.sql views do dashboard gráfico (por mês, por tipo, status das coletas)
+  06_estrutura_nova.sql  versão 2: pontos de coleta com geolocalização, panorama global, ranking e certificado público
+  07_carga_pontos_coleta.sql 285 pontos de coleta reais (ABREE) nas 27 UFs + pontos fictícios onde não há ponto real
 backend/
   API REST em Node.js + Express conectada ao MySQL (também entrega o site)
 circuitoverde-frontend/
@@ -40,19 +43,26 @@ circuitoverde-frontend/
 
 - **SGBD:** MySQL 8
 - **Normalização:** até a 3ª forma normal
-- **14 tabelas:** usuario, endereco, gerador, reciclador, transportador, material, reciclador_material, tipo_equipamento, item_eletronico, componente, componente_material, logistica_reversa, status_logistica, destino_final, certificado
+- **19 tabelas** (14 da versão 1 + ponto_coleta, ponto_coleta_categoria, regiao, pais, indicador_ewaste)
+- **Tabelas da versão 1:** usuario, endereco, gerador, reciclador, transportador, material, reciclador_material, tipo_equipamento, item_eletronico, componente, componente_material, logistica_reversa, status_logistica, destino_final, certificado
 - **Integridade:** chaves primárias e estrangeiras, UNIQUE, CHECK (CPF/CNPJ, CEP, pesos positivos)
 - **Triggers:**
   - histórico automático de status da logística reversa
   - bloqueio de destinação de componentes ainda não entregues ao reciclador
 - **Stored procedure:** `sp_emitir_certificado`, que emite o certificado numa transação (COMMIT/ROLLBACK)
-- **Views de indicadores:** kg recuperados por material, destinação por tipo, coleta por cidade, tempo médio da logística, rastreio de itens
+- **Views de indicadores:** kg recuperados por material, destinação por tipo, coleta por cidade, tempo médio da logística, rastreio de itens, descartes por mês e por tipo de equipamento, status das coletas
+- **Versão 2:**
+  - função `fn_distancia_km` (Haversine com `ST_Distance_Sphere`) e índice de latitude/longitude para achar os pontos mais próximos
+  - `vw_panorama`: descarte inadequado no mundo, por região e no Brasil (dados do Global E-waste Monitor 2020 e 2024, ONU)
+  - `vw_composicao_media_tipo`: calculadora de impacto aprendida com os registros dos recicladores
+  - `vw_ranking_geradores`: ranking com selo verde (ouro, prata, bronze) e nome abreviado de pessoa física (LGPD)
+  - `vw_certificado_publico`: validação do certificado pelo QR Code
 
 ## Como rodar
 
 ### Banco
 1. Abra o MySQL Workbench e conecte ao seu servidor MySQL 8.
-2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa) e `sql/03_consultas.sql`.
+2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql` e `sql/03_consultas.sql`.
 
 ### API
 ```bash
@@ -81,10 +91,38 @@ Teste em `http://localhost:3000/api/saude`. O arquivo `backend/requests.http` te
 | `POST /api/itens/:id/certificado` | reciclador | Emitir certificado |
 | `GET /api/itens/:id` | logado | Rastreio completo |
 | `GET /api/indicadores` | público | Painel de impacto |
+| `GET /api/pontos/proximos?lat=&lng=&raio=&categoria=` | público | Pontos de coleta mais próximos (geolocalização) |
+| `GET /api/pontos/cidades` | público | Cidades com pontos (busca sem GPS) |
+| `GET /api/panorama` | público | Dados do globo: descarte inadequado no mundo |
+| `GET /api/calculadora?id_tipo=&quantidade=` | público | Calculadora de impacto |
+| `GET /api/ranking` | público | Ranking com selo verde |
+| `GET /api/certificados/:codigo` | público | Validação do certificado (QR Code) |
+
+## Telas (frontend)
+
+- **Tema claro e escuro**: botão no topo; lembra a escolha e segue o tema do sistema na primeira visita
+- **Dashboard** de impacto
+- **Panorama global**: globo 3D que gira, com bolhas vermelhas nas regiões com mais lixo eletrônico sem destino (2019, 2022 e estimativa de 2026)
+- **Pontos de coleta**: mapa com a sua localização (GPS do navegador), raio e filtro por equipamento; rota no Google Maps
+- **Calculadora de impacto**: quanto material um equipamento rende na reciclagem
+- **Ranking e selo verde** dos geradores
+- **Rastreio estilo encomenda**: etapas do descarte ao certificado
+- **Certificado em PDF com QR Code** e tela pública de validação
+
+Bibliotecas do frontend ficam na pasta `vendor` (D3, TopoJSON, Leaflet, qrcode-generator) e funcionam sem `npm install`. O mapa usa os blocos do OpenStreetMap, que precisam de internet.
+
+## Fontes de dados reais
+
+- Pontos de coleta: base pública de pontos de recebimento da ABREE (Associação Brasileira de Reciclagem de Eletroeletrônicos e Eletrodomésticos), consultada em 19/10/2026. Pontos marcados como `FICTICIO` são dados de teste.
+- Panorama global: Global E-waste Monitor 2020 e 2024 (ITU/UNITAR) e Global E-waste Statistics Partnership.
 
 ## Próximos passos
 
 - [x] Frontend web
 - [x] Carga de dados em massa
+- [x] Dashboard gráfico com indicadores de impacto
+- [x] Tema claro e escuro
+- [x] Geolocalização e pontos de coleta reais
+- [x] Panorama global, calculadora, ranking e certificado com QR Code
 - [ ] Script de segurança (papéis e permissões no MySQL)
 - [ ] Deploy na Oracle Cloud (OCI)

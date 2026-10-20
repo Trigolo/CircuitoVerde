@@ -52,7 +52,13 @@ router.get('/:id', rota(async (req, res) => {
        JOIN logistica_reversa l ON l.id_logistica = s.id_logistica
       WHERE l.id_item = ? ORDER BY s.data_hora`, [id]);
 
-  res.json({ ...item, componentes, historico });
+  // Dados do próprio item para a linha do tempo do rastreio (versão 2)
+  const [[extra]] = await pool.query(
+    `SELECT i.data_descarte, i.peso_kg, i.estado, c.data_emissao AS data_certificado
+       FROM item_eletronico i LEFT JOIN certificado c ON c.id_item = i.id_item
+      WHERE i.id_item = ?`, [id]);
+
+  res.json({ ...item, ...extra, componentes, historico });
 }));
 
 // POST /api/itens/:id/certificado  (RECICLADOR ou ADMIN) -> chama a stored procedure

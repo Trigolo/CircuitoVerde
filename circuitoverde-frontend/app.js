@@ -52,7 +52,11 @@ function avisar(msg, erro = false) {
 }
 
 // ---------- Chamada à API ----------
-async function api(caminho, { metodo = 'GET', corpo } = {}) {
+let navegacao = 0;   // muda a cada troca de tela: respostas de telas antigas são descartadas
+class TelaTrocada extends Error {}
+
+async function api(caminho, { metodo = 'GET', corpo, global = false } = {}) {
+  const minhaNavegacao = navegacao;
   const headers = { 'Content-Type': 'application/json' };
   if (sessao?.token) headers.Authorization = 'Bearer ' + sessao.token;
   let resp;
@@ -64,6 +68,7 @@ async function api(caminho, { metodo = 'GET', corpo } = {}) {
     throw new Error('Não foi possível falar com a API. Ela está rodando (npm run dev)?');
   }
   const dados = await resp.json().catch(() => ({}));
+  if (!global && minhaNavegacao !== navegacao) throw new TelaTrocada();
   if (resp.status === 401 && sessao) { salvarSessao(null); montarMenu(); }
   if (!resp.ok) throw new Error(dados.erro || 'Erro ' + resp.status);
   return dados;
@@ -78,101 +83,366 @@ function fecharModal() { $('#modal').classList.add('escondido'); }
 $('#modal-fechar').onclick = fecharModal;
 $('#modal').onclick = (e) => { if (e.target.id === 'modal') fecharModal(); };
 
-// ---------- Menu por perfil ----------
-const TELAS_POR_PERFIL = {
-  ANONIMO:       [['painel', 'Painel de impacto'], ['pontos', 'Pontos de coleta'], ['login', 'Entrar']],
-  GERADOR:       [['painel', 'Painel de impacto'], ['pontos', 'Pontos de coleta'], ['meus', 'Meus descartes'], ['novo', 'Novo descarte']],
-  TRANSPORTADOR: [['painel', 'Painel de impacto'], ['pontos', 'Pontos de coleta'], ['coletas', 'Coletas']],
-  RECICLADOR:    [['painel', 'Painel de impacto'], ['pontos', 'Pontos de coleta'], ['coletas', 'Coletas'], ['reciclagem', 'Reciclagem']],
-  ADMIN:         [['painel', 'Painel de impacto'], ['pontos', 'Pontos de coleta'], ['itens', 'Todos os itens'], ['coletas', 'Coletas']],
-  AUDITOR:       [['painel', 'Painel de impacto'], ['pontos', 'Pontos de coleta'], ['itens', 'Todos os itens']],
+// ---------- Ícones (SVG em linha) ----------
+const ICONES = {
+  painel: '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>',
+  pontos: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  novo: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  meus: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  coletas: '<path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="5.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/>',
+  reciclagem: '<path d="M7 19H4.8a2 2 0 0 1-1.7-3L5 12.8M11 5.3l1.1-1.9a2 2 0 0 1 3.4 0L17.6 7M17 19h3.2a2 2 0 0 0 1.7-3l-1.6-2.8"/><path d="m14 16-3 3 3 3M8.3 13.8 5 12.8 4 16.1M20.3 9.2 17.6 7l-3.3.8"/>',
+  itens: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
+  sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 };
+const icone = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[nome] || ''}</svg>`;
+
+// ---------- Menu organizado por seções ----------
+const TITULOS = {
+  painel: 'Dashboard', pontos: 'Pontos de coleta', login: 'Entrar', novo: 'Novo descarte',
+  meus: 'Meus descartes', coletas: 'Coletas', reciclagem: 'Reciclagem', itens: 'Todos os itens',
+};
+const OPERACAO_POR_PERFIL = {
+  GERADOR: ['novo', 'meus'],
+  TRANSPORTADOR: ['coletas'],
+  RECICLADOR: ['reciclagem', 'coletas'],
+  ADMIN: ['itens', 'coletas'],
+  AUDITOR: ['itens'],
+};
+// Telas públicas (qualquer pessoa vê). A versão 2 (app-v2.js) acrescenta as novas.
+const TELAS_PUBLICAS = ['painel', 'pontos'];
+const TELAS_EXTRAS = {};   // preenchido pelo app-v2.js
+function telaInicial(perfil) { return (OPERACAO_POR_PERFIL[perfil] || ['painel'])[0]; }
+function permitida(tela) {
+  if ([...TELAS_PUBLICAS, 'login', 'validar'].includes(tela)) return true;
+  return (OPERACAO_POR_PERFIL[sessao?.usuario?.perfil] || []).includes(tela);
+}
 let telaAtual = 'painel';
 
 function montarMenu() {
-  const perfil = sessao?.usuario?.perfil || 'ANONIMO';
-  $('#menu').innerHTML = TELAS_POR_PERFIL[perfil]
-    .map(([id, nome]) => `<button data-tela="${id}" class="${id === telaAtual ? 'ativo' : ''}">${nome}</button>`)
-    .join('');
-  $('#menu').querySelectorAll('button').forEach((b) => (b.onclick = () => ir(b.dataset.tela)));
+  const perfil = sessao?.usuario?.perfil;
+  const item = (id) => `<button class="menu-item ${id === telaAtual ? 'ativo' : ''}" data-tela="${id}"
+      ${id === telaAtual ? 'aria-current="page"' : ''}>${icone(id)}<span>${TITULOS[id]}</span></button>`;
 
-  $('#sessao').innerHTML = sessao
-    ? `<span>${esc(sessao.usuario.nome)} · <b>${esc(sessao.usuario.perfil)}</b></span>
-       <button class="btn sec peq" id="sair" style="color:#BFD3CA;border-color:#BFD3CA">Sair</button>`
-    : '';
-  if (sessao) $('#sair').onclick = () => { salvarSessao(null); ir('painel'); avisar('Você saiu.'); };
+  let html = `<div class="menu-secao">Visão geral</div>${TELAS_PUBLICAS.map(item).join('')}`;
+  if (perfil) {
+    html += `<div class="menu-secao">Operação</div>${OPERACAO_POR_PERFIL[perfil].map(item).join('')}`;
+  } else {
+    html += `<div class="menu-secao">Acesso</div>${item('login')}`;
+  }
+  $('#menu').innerHTML = html;
+  $('#menu').querySelectorAll('[data-tela]').forEach((b) => (b.onclick = () => ir(b.dataset.tela)));
+
+  if (sessao) {
+    const nome = sessao.usuario.nome;
+    const iniciais = nome.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+    $('#sessao').innerHTML = `
+      <div class="usuario">
+        <div class="avatar">${esc(iniciais)}</div>
+        <div class="usuario-info"><strong title="${esc(nome)}">${esc(nome)}</strong><small>${esc(perfil.toLowerCase())}</small></div>
+        <button class="botao-icone" id="sair" title="Sair" aria-label="Sair">${icone('sair')}</button>
+      </div>`;
+    $('#sair').onclick = () => { salvarSessao(null); ir('painel'); avisar('Você saiu.'); };
+  } else {
+    $('#sessao').innerHTML = `<button class="btn" style="width:100%" id="btn-entrar">Entrar no sistema</button>`;
+    $('#btn-entrar').onclick = () => ir('login');
+  }
+  $('#trilha').innerHTML = `CircuitoVerde <span aria-hidden="true">/</span> <b>${TITULOS[telaAtual] || ''}</b>`;
 }
 
-async function ir(tela) {
+let limparTela = null;   // a tela atual pode deixar uma função de limpeza (ex.: parar a animação do globo)
+async function ir(tela, parametro) {
+  if (!permitida(tela)) tela = 'painel';
+  if (limparTela) { try { limparTela(); } catch {} limparTela = null; }
+  navegacao++;
   telaAtual = tela;
   montarMenu();
-  const telas = { painel, pontos, login, novo, meus, coletas, reciclagem, itens };
+  fecharMenuMobile();
+  esconderDica();
+  const telas = { painel, pontos, login, novo, meus, coletas, reciclagem, itens, ...TELAS_EXTRAS };
   $('#conteudo').innerHTML = '<p class="sub">Carregando...</p>';
   try {
-    await (telas[tela] || painel)();
+    await (telas[tela] || painel)(parametro);
   } catch (err) {
+    if (err instanceof TelaTrocada) return;   // o usuário já foi para outra tela
     $('#conteudo').innerHTML = `<div class="cartao vazio">${esc(err.message)}</div>`;
   }
+  window.scrollTo(0, 0);
+}
+
+// ---------- Logo interativa e menu no celular ----------
+$('#logo').onclick = (e) => {
+  e.preventDefault();
+  const logo = $('#logo');
+  logo.classList.remove('girando');
+  void logo.offsetWidth;            // reinicia a animação
+  logo.classList.add('girando');
+  ir('painel');
+};
+$('#logo').addEventListener('animationend', () => $('#logo').classList.remove('girando'));
+$('#abrir-menu').onclick = () => { $('#lateral').classList.add('aberta'); $('#fundo-menu').classList.add('visivel'); };
+$('#fundo-menu').onclick = fecharMenuMobile;
+function fecharMenuMobile() { $('#lateral').classList.remove('aberta'); $('#fundo-menu').classList.remove('visivel'); }
+
+// ---------- Indicador de conexão com a API ----------
+async function verificarApi() {
+  const el = $('#api-status');
+  try {
+    await api('/saude', { global: true });
+    el.className = 'api-status ok'; el.querySelector('.texto').textContent = 'API e banco conectados';
+  } catch {
+    el.className = 'api-status falha'; el.querySelector('.texto').textContent = 'API indisponível';
+  }
+}
+
+// ---------- Tooltip dos gráficos ----------
+// Qualquer elemento com data-dica="Valor|Rótulo" mostra a dica ao passar o mouse ou focar.
+const dica = $('#tooltip');
+function mostrarDica(alvo, x, y) {
+  const [valor, rotulo] = alvo.dataset.dica.split('|');
+  dica.replaceChildren();
+  const b = document.createElement('b'); b.textContent = valor;
+  const s = document.createElement('span'); s.textContent = rotulo || '';
+  dica.append(b, s);
+  const w = dica.offsetWidth, h = dica.offsetHeight;
+  dica.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, x - w / 2)) + 'px';
+  dica.style.top = Math.max(8, y - h - 12) + 'px';
+  dica.classList.add('visivel');
+}
+function esconderDica() { dica.classList.remove('visivel'); }
+document.addEventListener('pointermove', (e) => {
+  const alvo = e.target.closest?.('[data-dica]');
+  alvo ? mostrarDica(alvo, e.clientX, e.clientY) : esconderDica();
+});
+document.addEventListener('focusin', (e) => {
+  const alvo = e.target.closest?.('[data-dica]');
+  if (!alvo) return esconderDica();
+  const r = alvo.getBoundingClientRect();
+  mostrarDica(alvo, r.left + r.width / 2, r.top);
+});
+document.addEventListener('scroll', esconderDica, true);
+
+// ---------- Gráficos em SVG (sem bibliotecas externas) ----------
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const num = (n) => Number(n || 0).toLocaleString('pt-BR');
+
+function escalaBonita(max) {
+  if (max <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(max)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= max) return m * p;
+  return 10 * p;
+}
+
+// Últimos 12 meses (preenche com zero os meses sem descarte)
+function ultimos12Meses(porMes) {
+  const mapa = Object.fromEntries(porMes.map((m) => [m.mes, m]));
+  const hoje = new Date();
+  const lista = [];
+  for (let k = 11; k >= 0; k--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - k, 1);
+    const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    lista.push({
+      chave, rotulo: MESES[d.getMonth()], ano: d.getFullYear(),
+      itens: Number(mapa[chave]?.itens || 0), kg: Number(mapa[chave]?.kg || 0),
+    });
+  }
+  return lista;
+}
+
+// Gráfico de colunas: dados = [{ rotulo, valor, dica }]
+function graficoColunas(dados, { altura = 240, formato = num } = {}) {
+  const L = 680, mE = 40, mD = 8, mT = 18, mB = 28;
+  const larg = L - mE - mD, alt = altura - mT - mB;
+  const max = escalaBonita(Math.max(...dados.map((d) => d.valor), 1));
+  const banda = larg / dados.length;
+  const bw = Math.min(24, banda * 0.6);
+  const y = (v) => mT + alt - (v / max) * alt;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => max * f);
+  const iMax = dados.reduce((im, d, i) => (d.valor > dados[im].valor ? i : im), 0);
+
+  let svg = `<svg class="grafico" viewBox="0 0 ${L} ${altura}" role="img" aria-label="Gráfico de colunas">`;
+  svg += `<g class="eixo">${ticks.map((t) => `
+      <line class="grade-linha" x1="${mE}" x2="${L - mD}" y1="${y(t)}" y2="${y(t)}"/>
+      <text x="${mE - 8}" y="${y(t) + 4}" text-anchor="end">${formato(t)}</text>`).join('')}</g>`;
+  dados.forEach((d, i) => {
+    const cx = mE + banda * i + banda / 2;
+    const x = cx - bw / 2, yt = y(d.valor), h = mT + alt - yt;
+    const r = Math.min(4, h);
+    const caminho = h > 0
+      ? `M${x},${mT + alt} V${yt + r} Q${x},${yt} ${x + r},${yt} H${x + bw - r} Q${x + bw},${yt} ${x + bw},${yt + r} V${mT + alt} Z`
+      : '';
+    svg += `<g class="barra-grupo" tabindex="0" data-dica="${esc(d.dica)}">
+      <rect class="alvo" x="${mE + banda * i}" y="${mT}" width="${banda}" height="${alt}"/>
+      <path class="coluna" d="${caminho}"/></g>`;
+    svg += `<g class="eixo"><text x="${cx}" y="${altura - 8}" text-anchor="middle">${esc(d.rotulo)}</text></g>`;
+    if (i === iMax && d.valor > 0) {
+      svg += `<text class="rotulo-valor" x="${cx}" y="${yt - 6}" text-anchor="middle">${formato(d.valor)}</text>`;
+    }
+  });
+  svg += `<line class="linha-base" x1="${mE}" x2="${L - mD}" y1="${mT + alt}" y2="${mT + alt}"/></svg>`;
+  return svg;
+}
+
+// Barras horizontais: dados = [{ nome, valor, texto, dica, cinza }]
+function barrasHorizontais(dados) {
+  if (!dados.length) return '<p class="vazio">Sem dados ainda.</p>';
+  const max = Math.max(...dados.map((d) => d.valor), 0.0001);
+  return `<div class="barras-h">${dados.map((d) => `
+    <div class="barra-h ${d.cinza ? 'cinza' : ''}" tabindex="0" data-dica="${esc(d.dica)}">
+      <span class="nome" title="${esc(d.nome)}">${esc(d.nome)}</span>
+      <div class="trilho"><div class="preenchido" style="width:${(d.valor / max) * 100}%"></div></div>
+      <span class="valor">${esc(d.texto)}</span>
+    </div>`).join('')}</div>`;
+}
+
+// Mini gráfico de linha para os KPIs
+function sparkline(valores) {
+  const W = 96, H = 28, max = Math.max(...valores, 1);
+  const pts = valores.map((v, i) => [(i / (valores.length - 1)) * (W - 4) + 2, H - 3 - (v / max) * (H - 6)]);
+  const ult = pts[pts.length - 1];
+  return `<svg class="sparkline" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <polyline points="${pts.map((p) => p.join(',')).join(' ')}" fill="none" stroke="var(--neutro-serie)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${ult[0]}" cy="${ult[1]}" r="3.5" fill="var(--serie-1)" stroke="var(--superficie)" stroke-width="2"/></svg>`;
 }
 
 // =====================================================================
 // TELAS
 // =====================================================================
 
-// ---------- Painel de impacto (UC10) ----------
+// ---------- Dashboard (UC10) ----------
 async function painel() {
   const d = await api('/indicadores');
   const t = d.totais;
-  const max = Math.max(...d.por_material.map((m) => m.kg_recuperados), 0.001);
+  const meses = ultimos12Meses(d.por_mes || []);
+  const pctComprovado = t.kg_descartados ? (t.kg_com_destino_comprovado / t.kg_descartados) * 100 : 0;
+  const pct = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+
+  // Destino dos componentes (parte do todo)
+  const CORES_DESTINO = { RECICLAGEM: 'var(--serie-1)', REUSO: 'var(--serie-2)', DESCARTE_ESPECIAL: 'var(--serie-3)' };
+  const NOMES_DESTINO = { RECICLAGEM: 'Reciclagem', REUSO: 'Reuso', DESCARTE_ESPECIAL: 'Descarte especial' };
+  const totalDestino = d.por_destino.reduce((s, x) => s + Number(x.kg), 0) || 1;
+  const destinos = ['RECICLAGEM', 'REUSO', 'DESCARTE_ESPECIAL']
+    .map((k) => d.por_destino.find((x) => x.tipo === k) || { tipo: k, kg: 0, componentes: 0 });
+
+  // Status das coletas, na ordem do fluxo
+  const ORDEM = ['SOLICITADA', 'AGENDADA', 'EM_TRANSITO', 'ENTREGUE', 'CANCELADA'];
+  const statusMap = Object.fromEntries((d.status_coletas || []).map((s) => [s.status, Number(s.coletas)]));
+  const maxCidade = Math.max(...d.por_cidade.map((c) => Number(c.kg_descartados)), 1);
 
   $('#conteudo').innerHTML = `
-    <h1>Painel de impacto</h1>
-    <p class="sub">Indicadores calculados pelas views do banco de dados.</p>
-
-    <div class="grade g4">
-      <div class="cartao kpi"><div class="rotulo">Itens descartados</div><div class="valor">${t.itens_descartados}</div></div>
-      <div class="cartao kpi"><div class="rotulo">Peso descartado</div><div class="valor">${kg(t.kg_descartados)} <span class="unidade">kg</span></div></div>
-      <div class="cartao kpi"><div class="rotulo">Certificados emitidos</div><div class="valor">${t.certificados_emitidos}</div></div>
-      <div class="cartao kpi"><div class="rotulo">Com destino comprovado</div><div class="valor">${kg(t.kg_com_destino_comprovado)} <span class="unidade">kg</span></div></div>
+    <div class="cabecalho">
+      <div>
+        <h1>Dashboard de impacto</h1>
+        <p class="sub">Indicadores calculados em tempo real pelas views do banco de dados.</p>
+      </div>
+      <button class="btn sec" id="atualizar">Atualizar dados</button>
     </div>
 
-    <div class="grade g2" style="margin-top:18px">
-      <div class="cartao">
-        <h2>Materiais recuperados (kg)</h2>
-        <div class="barras">
-          ${d.por_material.map((m) => `
-            <div class="barra-linha" title="${esc(m.material)}: ${kg(m.kg_recuperados)} kg · valor estimado ${reais(m.valor_estimado_reais)}">
-              <span>${esc(m.material)}</span>
-              <div class="barra-trilho"><div class="barra" style="width:${(m.kg_recuperados / max) * 100}%"></div></div>
-              <span class="barra-valor">${kg(m.kg_recuperados)}</span>
-            </div>`).join('') || '<p class="vazio">Sem dados ainda.</p>'}
+    <div class="dash">
+      <div class="cartao kpi c3">
+        <span class="rotulo">Itens descartados</span>
+        <span class="valor">${num(t.itens_descartados)}</span>
+        <div class="rodape"><span>últimos 12 meses</span>${sparkline(meses.map((m) => m.itens))}</div>
+      </div>
+      <div class="cartao kpi c3">
+        <span class="rotulo">Peso descartado</span>
+        <span class="valor">${kg(t.kg_descartados)}<span class="unidade">kg</span></span>
+        <div class="rodape"><span>${num(t.geradores)} geradores</span>${sparkline(meses.map((m) => m.kg))}</div>
+      </div>
+      <div class="cartao kpi c3">
+        <span class="rotulo">Certificados emitidos</span>
+        <span class="valor">${num(t.certificados_emitidos)}</span>
+        <div class="rodape"><span>${num(t.pontos_coleta)} pontos de coleta ativos</span></div>
+      </div>
+      <div class="cartao kpi c3">
+        <span class="rotulo">Peso com destino comprovado</span>
+        <span class="valor">${pct(pctComprovado)}</span>
+        <div class="medidor" role="meter" aria-valuenow="${pctComprovado.toFixed(1)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${Math.min(100, pctComprovado)}%"></div></div>
+        <div class="rodape"><span>${kg(t.kg_com_destino_comprovado)} kg certificados</span></div>
+      </div>
+
+      <div class="cartao c8">
+        <h2>Itens descartados por mês</h2>
+        <p class="legenda-card">Quantidade de equipamentos registrados nos últimos 12 meses</p>
+        ${graficoColunas(meses.map((m) => ({
+          rotulo: m.rotulo, valor: m.itens,
+          dica: `${num(m.itens)} itens · ${kg(m.kg)} kg|${m.rotulo}/${m.ano}`,
+        })))}
+      </div>
+
+      <div class="cartao c4">
+        <h2>Destino dos componentes</h2>
+        <p class="legenda-card">Participação no peso total destinado</p>
+        <div class="empilhada">${destinos.map((x) => `
+          <div style="width:${(Number(x.kg) / totalDestino) * 100}%;background:${CORES_DESTINO[x.tipo]}"
+               tabindex="0" data-dica="${kg(x.kg)} kg · ${pct((Number(x.kg) / totalDestino) * 100)}|${NOMES_DESTINO[x.tipo]}"></div>`).join('')}
+        </div>
+        <ul class="legenda">${destinos.map((x) => `
+          <li><span class="amostra" style="background:${CORES_DESTINO[x.tipo]}"></span>
+              <span class="nome">${NOMES_DESTINO[x.tipo]}</span>
+              <span class="num">${kg(x.kg)} kg</span>
+              <span class="pct">${pct((Number(x.kg) / totalDestino) * 100)}</span></li>`).join('')}
+        </ul>
+        <div class="resumo-destino">
+          <div><span>Total destinado</span><b>${kg(totalDestino)} kg</b></div>
+          <div><span>Componentes</span><b>${num(d.por_destino.reduce((s2, x) => s2 + Number(x.componentes), 0))}</b></div>
         </div>
       </div>
 
-      <div class="cartao">
-        <h2>Destino dos componentes</h2>
-        <table>
-          <tr><th>Destino</th><th class="num">Componentes</th><th class="num">kg</th></tr>
-          ${d.por_destino.map((x) => `<tr><td>${esc(x.tipo.replace('_', ' ').toLowerCase())}</td><td class="num">${x.componentes}</td><td class="num">${kg(x.kg)}</td></tr>`).join('')}
-        </table>
+      <div class="cartao c4">
+        <h2>Materiais recuperados</h2>
+        <p class="legenda-card">kg enviados para reciclagem ou reuso</p>
+        ${barrasHorizontais(d.por_material.map((m) => ({
+          nome: m.material, valor: Number(m.kg_recuperados), texto: kg(m.kg_recuperados),
+          dica: `${kg(m.kg_recuperados)} kg · ${reais(m.valor_estimado_reais)}|${m.material} (valor estimado)`,
+        })))}
       </div>
 
-      <div class="cartao">
+      <div class="cartao c4">
+        <h2>Equipamentos mais descartados</h2>
+        <p class="legenda-card">Quantidade de itens por tipo</p>
+        ${barrasHorizontais((d.por_tipo || []).slice(0, 7).map((x) => ({
+          nome: x.equipamento, valor: Number(x.itens), texto: num(x.itens),
+          dica: `${num(x.itens)} itens · ${kg(x.kg)} kg|${x.equipamento}`,
+        })))}
+      </div>
+
+      <div class="cartao c4">
+        <h2>Coletas por status</h2>
+        <p class="legenda-card">Situação atual da logística reversa</p>
+        ${barrasHorizontais(ORDEM.map((s) => ({
+          nome: NOMES_STATUS[s], valor: statusMap[s] || 0, texto: num(statusMap[s] || 0),
+          dica: `${num(statusMap[s] || 0)} coletas|${NOMES_STATUS[s]}`, cinza: s === 'CANCELADA',
+        })))}
+      </div>
+
+      <div class="cartao c7">
         <h2>Descartes por cidade</h2>
+        <p class="legenda-card">Onde o resíduo eletrônico está sendo gerado</p>
         <table>
-          <tr><th>Cidade</th><th class="num">Itens</th><th class="num">kg</th></tr>
-          ${d.por_cidade.map((x) => `<tr><td>${esc(x.cidade)} / ${esc(x.uf)}</td><td class="num">${x.itens}</td><td class="num">${kg(x.kg_descartados)}</td></tr>`).join('')}
+          <tr><th>Cidade</th><th class="num">Itens</th><th class="num">kg</th><th style="width:30%"></th></tr>
+          ${d.por_cidade.map((c) => `<tr>
+            <td>${esc(c.cidade)} <span style="color:var(--texto-3)">${esc(c.uf)}</span></td>
+            <td class="num">${num(c.itens)}</td><td class="num">${kg(c.kg_descartados)}</td>
+            <td><div class="mini-barra"><div style="width:${(Number(c.kg_descartados) / maxCidade) * 100}%"></div></div></td>
+          </tr>`).join('')}
         </table>
       </div>
 
-      <div class="cartao">
-        <h2>Tempo médio da logística reversa</h2>
+      <div class="cartao c5">
+        <h2>Tempo médio da logística</h2>
+        <p class="legenda-card">Da solicitação à entrega, por reciclador</p>
         <table>
           <tr><th>Reciclador</th><th class="num">Coletas</th><th class="num">Dias</th></tr>
-          ${d.tempo_logistica.map((x) => `<tr><td>${esc(x.reciclador)}</td><td class="num">${x.coletas_entregues}</td><td class="num">${Number(x.dias_medios).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td></tr>`).join('')}
+          ${d.tempo_logistica.slice(0, 8).map((x) => `<tr>
+            <td>${esc(x.reciclador)}</td><td class="num">${num(x.coletas_entregues)}</td>
+            <td class="num">${Number(x.dias_medios).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+          </tr>`).join('')}
         </table>
       </div>
     </div>`;
+
+  $('#atualizar').onclick = () => ir('painel');
 }
 
 // ---------- Pontos de coleta (UC03) ----------
@@ -238,8 +508,8 @@ async function login() {
       const r = await api('/auth/login', { metodo: 'POST', corpo: { email, senha } });
       salvarSessao({ token: r.token, usuario: r.usuario });
       avisar(`Olá, ${r.usuario.nome}!`);
-      ir(TELAS_POR_PERFIL[r.usuario.perfil][2]?.[0] || 'painel');
-    } catch (err) { avisar(err.message, true); }
+      ir(telaInicial(r.usuario.perfil));
+    } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
   };
   $('#f-login').onsubmit = (e) => {
     e.preventDefault();
@@ -285,7 +555,7 @@ async function novo() {
       } });
       avisar(`Descarte nº ${r.id_item} registrado. Agora solicite a coleta.`);
       ir('meus');
-    } catch (err) { avisar(err.message, true); }
+    } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
   };
 }
 
@@ -353,7 +623,7 @@ async function solicitarColeta(idItem) {
         id_item: Number(idItem), id_reciclador: Number(new FormData(e.target).get('id_reciclador')),
       } });
       fecharModal(); avisar('Coleta solicitada!'); ir('meus');
-    } catch (err) { avisar(err.message, true); }
+    } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
   };
 }
 
@@ -437,7 +707,7 @@ async function mudarStatus(id, para, recarregar) {
     try {
       await api(`/logisticas/${id}/status`, { metodo: 'PATCH', corpo: { status: para, ...extra } });
       fecharModal(); avisar(`Coleta nº ${id}: ${NOMES_STATUS[para]}.`); recarregar();
-    } catch (err) { avisar(err.message, true); }
+    } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
   };
   if (para !== 'AGENDADA') return enviar();
 
@@ -524,7 +794,7 @@ async function gerenciarItem(idItem) {
         id_componente: Number(f.get('id_componente')), tipo: f.get('tipo'), local_destino: f.get('local_destino'),
       } });
       avisar('Destino registrado.'); recarregar();
-    } catch (err) { avisar(err.message, true); }
+    } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
   });
 
   if ($('#f-comp')) {
@@ -551,17 +821,17 @@ async function gerenciarItem(idItem) {
           reaproveitavel: f.get('reap') === '1', materiais,
         } });
         avisar('Componente registrado.'); recarregar();
-      } catch (err) { avisar(err.message, true); }
+      } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
     };
 
     $('#emitir').onclick = async () => {
       try {
         const c = await api(`/itens/${idItem}/certificado`, { metodo: 'POST' });
         avisar('Certificado emitido: ' + c.codigo); recarregar();
-      } catch (err) { avisar(err.message, true); }
+      } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
     };
   }
 }
 
 // ---------- Início ----------
-ir('painel');
+// A inicialização fica no final do app-v2.js (depois de registrar as telas novas).
