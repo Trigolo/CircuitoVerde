@@ -610,6 +610,9 @@ function rotaDoEndereco() {
   return null;
 }
 addEventListener('hashchange', rotaDoEndereco);
-if (!rotaDoEndereco()) ir('painel');
-verificarApi();
-setInterval(verificarApi, 30000);
+// A inicialização é chamada pelo app-v3.js (que registra a tela inicial e o novo menu)
+function iniciarApp(telaPadrao = 'painel') {
+  if (!rotaDoEndereco()) ir(telaPadrao);
+  verificarApi();
+  setInterval(verificarApi, 30000);
+}

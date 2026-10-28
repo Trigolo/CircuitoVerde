@@ -33,6 +33,7 @@ sql/
   05_views_dashboard.sql views do dashboard gráfico (por mês, por tipo, status das coletas)
   06_estrutura_nova.sql  versão 2: pontos de coleta com geolocalização, panorama global, ranking e certificado público
   07_carga_pontos_coleta.sql 285 pontos de coleta reais (ABREE) nas 27 UFs + pontos fictícios onde não há ponto real
+  08_assistente.sql      registro das conversas do assistente virtual e views de uso
 backend/
   API REST em Node.js + Express conectada ao MySQL (também entrega o site)
 circuitoverde-frontend/
@@ -43,7 +44,7 @@ circuitoverde-frontend/
 
 - **SGBD:** MySQL 8
 - **Normalização:** até a 3ª forma normal
-- **19 tabelas** (14 da versão 1 + ponto_coleta, ponto_coleta_categoria, regiao, pais, indicador_ewaste)
+- **20 tabelas** (15 da versão 1 + ponto_coleta, ponto_coleta_categoria, regiao, pais, indicador_ewaste)
 - **Tabelas da versão 1:** usuario, endereco, gerador, reciclador, transportador, material, reciclador_material, tipo_equipamento, item_eletronico, componente, componente_material, logistica_reversa, status_logistica, destino_final, certificado
 - **Integridade:** chaves primárias e estrangeiras, UNIQUE, CHECK (CPF/CNPJ, CEP, pesos positivos)
 - **Triggers:**
@@ -62,7 +63,7 @@ circuitoverde-frontend/
 
 ### Banco
 1. Abra o MySQL Workbench e conecte ao seu servidor MySQL 8.
-2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql` e `sql/03_consultas.sql`.
+2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql` e `sql/03_consultas.sql`.
 
 ### API
 ```bash
@@ -97,8 +98,22 @@ Teste em `http://localhost:3000/api/saude`. O arquivo `backend/requests.http` te
 | `GET /api/calculadora?id_tipo=&quantidade=` | público | Calculadora de impacto |
 | `GET /api/ranking` | público | Ranking com selo verde |
 | `GET /api/certificados/:codigo` | público | Validação do certificado (QR Code) |
+| `POST /api/assistente` | público (login opcional) | Assistente virtual |
+| `GET /api/assistente/status` | público | Motor ativo do assistente (Gemini ou regras) |
+
+## Assistente virtual (chatbot)
+
+Botão **Assistente** no canto da tela, disponível em todas as páginas.
+
+- **Motor principal:** Google Gemini (camada gratuita) com *function calling*. A IA não escreve SQL: ela escolhe uma das 7 ferramentas (pontos de coleta, rastreio, certificado, indicadores, panorama, calculadora e ranking), que consultam as views e funções do banco.
+- **Reserva:** bot por regras, que entende a pergunta por palavras-chave e usa as mesmas consultas. Funciona sem internet e sem chave.
+- **Configuração:** crie uma chave grátis em https://aistudio.google.com e coloque `GEMINI_API_KEY=...` no `.env`. Sem chave, o chat usa só o bot por regras.
+- **Segurança:** consultas só de leitura, limite de 15 perguntas por minuto por IP, nomes de pessoas só para o dono do item (LGPD).
+- **Banco:** cada pergunta fica em `assistente_conversa`; as views `vw_assistente_uso` e `vw_assistente_ferramentas` mostram o uso.
 
 ## Telas (frontend)
+
+- **Visual vibrante (versão 3)**: tela inicial de apresentação com ilustração animada e números ao vivo, menu no topo (barra inferior no celular), animações de entrada e contadores
 
 - **Tema claro e escuro**: botão no topo; lembra a escolha e segue o tema do sistema na primeira visita
 - **Dashboard** de impacto
@@ -124,5 +139,6 @@ Bibliotecas do frontend ficam na pasta `vendor` (D3, TopoJSON, Leaflet, qrcode-g
 - [x] Tema claro e escuro
 - [x] Geolocalização e pontos de coleta reais
 - [x] Panorama global, calculadora, ranking e certificado com QR Code
+- [x] Assistente virtual com IA (Gemini) e bot por regras
 - [ ] Script de segurança (papéis e permissões no MySQL)
 - [ ] Deploy na Oracle Cloud (OCI)

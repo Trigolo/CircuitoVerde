@@ -29,6 +29,7 @@ app.use('/api',             require('./routes/reciclagem'));
 app.use('/api/indicadores', require('./routes/indicadores'));
 app.use('/api/pontos',      require('./routes/pontos'));     // versão 2: geolocalização
 app.use('/api',             require('./routes/impacto'));    // versão 2: panorama, calculadora, ranking, certificado
+app.use('/api/assistente',  require('./routes/assistente')); // assistente virtual (Gemini + regras)
 
 app.use((req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));
 app.use(tratarErros);
