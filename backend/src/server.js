@@ -16,6 +16,7 @@ if (process.env.JWT_SECRET.length < 16) console.warn('Aviso: JWT_SECRET muito cu
 
 const app = express();
 app.disable('x-powered-by');                 // não anuncia que é Express
+if (process.env.TRUST_PROXY) app.set('trust proxy', 1); // na nuvem (Render): pega o IP real do visitante para o limite de tentativas
 app.use((req, res, next) => {                // cabeçalhos básicos de segurança
   res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'strict-origin-when-cross-origin' });
   next();
