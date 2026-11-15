@@ -1,0 +1,145 @@
+### =========================================================
+### Testes da API CircuitoVerde (extensão "REST Client" do VS Code)
+### Clique em "Send Request" acima de cada bloco.
+### Senha de todos os usuários de teste: 123456 (depois de "npm run senhas")
+### =========================================================
+
+@api = http://localhost:3000/api
+
+### 1. A API está no ar?
+GET {{api}}/saude
+
+### 2. Catálogos e pontos de coleta (públicos)
+GET {{api}}/tipos-equipamento
+
+###
+GET {{api}}/pontos-coleta?material=Cobre&cidade=Curitiba
+
+### 3. Painel de indicadores (público)
+GET {{api}}/indicadores
+
+### =========================================================
+### Fluxo completo: gerador -> transportador -> reciclador
+### =========================================================
+
+### 4. Login como GERADOR (Ana)
+# @name loginGerador
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "email": "ana@exemplo.com", "senha": "123456" }
+
+###
+@tokenGerador = {{loginGerador.response.body.token}}
+
+### 5. Registrar descarte (UC02)
+# @name novoItem
+POST {{api}}/itens
+Authorization: Bearer {{tokenGerador}}
+Content-Type: application/json
+
+{ "id_tipo": 1, "descricao": "Notebook velho", "estado": "SUCATA", "peso_kg": 2.1 }
+
+###
+@idItem = {{novoItem.response.body.id_item}}
+
+### 6. Solicitar coleta para a Recicla Sul (UC04)
+# @name novaColeta
+POST {{api}}/logisticas
+Authorization: Bearer {{tokenGerador}}
+Content-Type: application/json
+
+{ "id_item": {{idItem}}, "id_reciclador": 1 }
+
+###
+@idLogistica = {{novaColeta.response.body.id_logistica}}
+
+### 7. Login como TRANSPORTADOR (Carlos)
+# @name loginTransp
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "email": "carlos@exemplo.com", "senha": "123456" }
+
+###
+@tokenTransp = {{loginTransp.response.body.token}}
+
+### 8. Aceitar e agendar (UC05) -> o trigger grava o histórico
+PATCH {{api}}/logisticas/{{idLogistica}}/status
+Authorization: Bearer {{tokenTransp}}
+Content-Type: application/json
+
+{ "status": "AGENDADA", "data_agendada": "2026-10-20 09:00:00", "rota": "Centro > CIC" }
+
+### 9. Em trânsito (UC06)
+PATCH {{api}}/logisticas/{{idLogistica}}/status
+Authorization: Bearer {{tokenTransp}}
+Content-Type: application/json
+
+{ "status": "EM_TRANSITO" }
+
+### 10. Entregue ao reciclador
+PATCH {{api}}/logisticas/{{idLogistica}}/status
+Authorization: Bearer {{tokenTransp}}
+Content-Type: application/json
+
+{ "status": "ENTREGUE" }
+
+### 11. Login como RECICLADOR (Recicla Sul)
+# @name loginRec
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "email": "operacao@reciclasul.com", "senha": "123456" }
+
+###
+@tokenRec = {{loginRec.response.body.token}}
+
+### 12. Registrar componente com materiais (UC07) - transação
+# @name novoComp
+POST {{api}}/componentes
+Authorization: Bearer {{tokenRec}}
+Content-Type: application/json
+
+{ "id_item": {{idItem}}, "nome": "Placa-mãe", "peso_kg": 0.5,
+  "materiais": [ { "id_material": 5, "peso_kg": 0.45 }, { "id_material": 1, "peso_kg": 0.05 } ] }
+
+###
+@idComp = {{novoComp.response.body.id_componente}}
+
+### 13. Registrar destino final (UC08)
+POST {{api}}/destinos
+Authorization: Bearer {{tokenRec}}
+Content-Type: application/json
+
+{ "id_componente": {{idComp}}, "tipo": "RECICLAGEM", "local_destino": "Refino de metais" }
+
+### 14. Emitir certificado (UC09) -> chama a stored procedure
+POST {{api}}/itens/{{idItem}}/certificado
+Authorization: Bearer {{tokenRec}}
+
+### 15. Rastreio completo do item (como gerador)
+GET {{api}}/itens/{{idItem}}
+Authorization: Bearer {{tokenGerador}}
+
+### =========================================================
+### Testes de erro (o banco/API devem BLOQUEAR)
+### =========================================================
+
+### Peso negativo -> CHECK constraint
+POST {{api}}/itens
+Authorization: Bearer {{tokenGerador}}
+Content-Type: application/json
+
+{ "id_tipo": 1, "estado": "SUCATA", "peso_kg": -1 }
+
+### Certificado do item 4 (tem componente sem destino) -> procedure recusa
+POST {{api}}/itens/4/certificado
+Authorization: Bearer {{tokenRec}}
+
+### Gerador tentando registrar componente -> 403
+POST {{api}}/componentes
+Authorization: Bearer {{tokenGerador}}
+Content-Type: application/json
+
+{ "id_item": 1, "nome": "Teste", "peso_kg": 1 }
