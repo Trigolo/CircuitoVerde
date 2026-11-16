@@ -37,6 +37,7 @@ sql/
   09_seguranca.sql       usuários e papéis (roles) do MySQL com o mínimo de permissão
   10_indices.sql         índices compostos para as consultas mais usadas (com EXPLAIN)
   11_usuario_gustavo.sql login por nome de usuário e o usuário Gustavo em todos os perfis (senha Gustavo)
+  12_demo_reciclador.sql  itens de demonstração do Gustavo em cada etapa da reciclagem (a caminho, sem componentes, sem destino, pronto para certificar)
   backup.bat             backup com mysqldump (dados, views, triggers e procedures)
   restaurar.bat          restaura um backup
 backend/
@@ -76,7 +77,7 @@ circuitoverde-frontend/
 
 ### Banco
 1. Abra o MySQL Workbench e conecte ao seu servidor MySQL 8.
-2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql`, `sql/09_seguranca.sql`, `sql/10_indices.sql`, `sql/11_usuario_gustavo.sql` e `sql/03_consultas.sql`.
+2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql`, `sql/09_seguranca.sql`, `sql/10_indices.sql`, `sql/11_usuario_gustavo.sql`, `sql/12_demo_reciclador.sql` e `sql/03_consultas.sql`.
    Para entrar no site: usuário **Gustavo**, senha **Gustavo** e o perfil desejado.
 3. Troque as senhas dos usuários no fim do `09_seguranca.sql` e use o `cv_app` no `.env` da API (`DB_USER=cv_app`). Em desenvolvimento dá para continuar com o `root`.
 

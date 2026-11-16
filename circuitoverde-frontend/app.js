@@ -706,6 +706,10 @@ const PROXIMOS = {
 };
 const ACAO = { AGENDADA: 'Agendar', EM_TRANSITO: 'Saiu para coleta', ENTREGUE: 'Marcar entregue', CANCELADA: 'Cancelar' };
 
+// O reciclador não agenda nem transporta: ele só confirma o recebimento do que está a caminho
+const ehReciclador = () => sessao?.usuario?.perfil === 'RECICLADOR';
+const acoesDaColeta = (status) => (ehReciclador() ? (status === 'EM_TRANSITO' ? ['ENTREGUE'] : []) : (PROXIMOS[status] || []));
+
 async function coletas() {
   $('#conteudo').innerHTML = `
     <h1>Coletas</h1>
@@ -734,8 +738,8 @@ async function coletas() {
         <td>${dataBR(l.data_solicitacao)}</td>
         <td>${dataBR(l.data_agendada)}</td>
         <td>${badge(l.status)}</td>
-        <td class="acoes">${(PROXIMOS[l.status] || []).map((p) =>
-          `<button class="btn peq ${p === 'CANCELADA' ? 'sec' : ''}" data-log="${l.id_logistica}" data-para="${p}">${ACAO[p]}</button>`).join('')}
+        <td class="acoes">${acoesDaColeta(l.status).map((p) =>
+          `<button class="btn peq ${p === 'CANCELADA' ? 'sec' : ''}" data-log="${l.id_logistica}" data-para="${p}">${ehReciclador() ? 'Confirmar recebimento' : ACAO[p]}</button>`).join('')}
           <button class="btn sec peq" data-rastrear="${l.id_item}">Rastrear</button>
         </td>
       </tr>`).join('')}
@@ -773,21 +777,47 @@ async function mudarStatus(id, para, recarregar) {
 }
 
 // ---------- Reciclagem (UC07, UC08 e UC09) ----------
+// A API já devolve só as coletas deste reciclador; aqui separamos o que está a caminho e o que já chegou
+function etapaReciclagem(l) {
+  if (l.certificado) return ['Certificado emitido', 'concluido'];
+  if (!l.componentes) return ['Registrar componentes', 'pendente'];
+  if (l.sem_destino) return [`Definir destino (${l.sem_destino})`, 'pendente'];
+  return ['Pronto para certificar', 'pronto'];
+}
 async function reciclagem() {
-  const lista = (await api('/logisticas?status=ENTREGUE'))
-    .filter((l) => l.reciclador === sessao.usuario.nome);
+  const todas = await api('/logisticas');
+  const aCaminho = todas.filter((l) => l.status === 'EM_TRANSITO');
+  const entregues = todas.filter((l) => l.status === 'ENTREGUE')
+    .sort((x, y) => (!!x.certificado - !!y.certificado) || String(y.data_entrega).localeCompare(String(x.data_entrega)));
+  const pendentes = entregues.filter((l) => !l.certificado).length;
   $('#conteudo').innerHTML = `
     <h1>Reciclagem</h1>
-    <p class="sub">Itens entregues a você. Registre os componentes, defina o destino e emita o certificado.</p>
-    <div class="cartao">${!lista.length ? '<p class="vazio">Nenhum item entregue ainda.</p>' : `<table>
-      <tr><th>Item</th><th class="num">kg</th><th>Entregue em</th><th></th></tr>
-      ${lista.map((l) => `<tr>
+    <p class="sub">Confirme o que chegou, registre os componentes, defina o destino de cada um e emita o certificado.</p>
+    <div class="m-resumo r-resumo">
+      <div class="cartao kpi"><span class="rotulo">A caminho</span><span class="valor">${num(aCaminho.length)}</span></div>
+      <div class="cartao kpi"><span class="rotulo">Para processar</span><span class="valor">${num(pendentes)}</span></div>
+      <div class="cartao kpi"><span class="rotulo">Certificados</span><span class="valor">${num(entregues.length - pendentes)}</span></div>
+    </div>
+    ${aCaminho.length ? `<div class="cartao" style="margin-bottom:18px"><h2 style="font-size:16px">A caminho</h2><table>
+      <tr><th>Item</th><th class="num">kg</th><th>Agendada</th><th></th></tr>
+      ${aCaminho.map((l) => `<tr>
+        <td>${esc(l.equipamento)} <small style="color:var(--texto-2)">nº ${l.id_item}</small></td>
+        <td class="num">${kg(l.peso_kg)}</td>
+        <td>${dataBR(l.data_agendada)}</td>
+        <td><button class="btn peq" data-receber="${l.id_logistica}">Confirmar recebimento</button></td>
+      </tr>`).join('')}
+    </table></div>` : ''}
+    <div class="cartao"><h2 style="font-size:16px">Itens entregues a você</h2>${!entregues.length ? '<p class="vazio">Nenhum item entregue ainda. Quando um gerador escolher você e o transportador entregar, o item aparece aqui.</p>' : `<table>
+      <tr><th>Item</th><th class="num">kg</th><th>Entregue em</th><th>Próxima etapa</th><th></th></tr>
+      ${entregues.map((l) => { const [etapa, tipo] = etapaReciclagem(l); return `<tr>
         <td>${esc(l.equipamento)} <small style="color:var(--texto-2)">nº ${l.id_item}</small></td>
         <td class="num">${kg(l.peso_kg)}</td>
         <td>${dataBR(l.data_entrega)}</td>
-        <td><button class="btn peq" data-gerenciar="${l.id_item}">Gerenciar</button></td>
-      </tr>`).join('')}
+        <td><span class="etapa etapa-${tipo}">${esc(etapa)}</span></td>
+        <td><button class="btn peq ${l.certificado ? 'sec' : ''}" data-gerenciar="${l.id_item}">${l.certificado ? 'Ver' : 'Gerenciar'}</button></td>
+      </tr>`; }).join('')}
     </table>`}</div>`;
+  document.querySelectorAll('[data-receber]').forEach((b) => (b.onclick = () => mudarStatus(b.dataset.receber, 'ENTREGUE', reciclagem)));
   document.querySelectorAll('[data-gerenciar]').forEach((b) => (b.onclick = () => gerenciarItem(b.dataset.gerenciar)));
 }
 
@@ -831,7 +861,7 @@ async function gerenciarItem(idItem) {
       <button class="btn ambar" id="emitir" ${!r.componentes.length || pendentes.length ? 'disabled' : ''}>Emitir certificado</button>
       <small style="color:var(--texto-2);margin-left:8px">${pendentes.length ? 'Todos os componentes precisam de destino.' : ''}</small>` : ''}`);
 
-  const recarregar = () => gerenciarItem(idItem);
+  const recarregar = () => { gerenciarItem(idItem); if (typeof reciclagem === 'function' && document.querySelector('[data-gerenciar]')) reciclagem().catch(() => {}); };
 
   $('#f-destino') && ($('#f-destino').onsubmit = async (e) => {
     e.preventDefault();

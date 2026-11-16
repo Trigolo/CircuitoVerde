@@ -367,9 +367,17 @@ TELAS_EXTRAS.cadastro = async function cadastro() {
   $('#conteudo').innerHTML = `
     <div class="cartao cadastro">
       <h1>Criar conta</h1>
-      <p class="sub">Para registrar seus eletrônicos, pedir a coleta e receber o certificado de destinação.</p>
+      <p class="sub" id="c-sub">Para registrar seus eletrônicos, pedir a coleta e receber o certificado de destinação.</p>
       <form id="f-cadastro" novalidate>
         <fieldset>
+          <legend>Como você vai usar o CircuitoVerde</legend>
+          <div class="segmentado" id="c-perfil" role="radiogroup" aria-label="Perfil da conta">
+            <button type="button" role="radio" aria-checked="true" class="ativo" data-perfil="GERADOR">Quero descartar</button>
+            <button type="button" role="radio" aria-checked="false" data-perfil="TRANSPORTADOR">Sou transportador</button>
+            <button type="button" role="radio" aria-checked="false" data-perfil="RECICLADOR">Sou reciclador</button>
+          </div>
+        </fieldset>
+        <fieldset data-perfis="GERADOR TRANSPORTADOR">
           <legend>Você é</legend>
           <div class="segmentado" id="c-tipo" role="radiogroup" aria-label="Tipo de conta">
             <button type="button" role="radio" aria-checked="true" class="ativo" data-tipo="PF">Pessoa (CPF)</button>
@@ -382,13 +390,18 @@ TELAS_EXTRAS.cadastro = async function cadastro() {
         </div>
         <div class="linha">
           <label>E-mail <input name="email" type="email" autocomplete="email" required maxlength="150"></label>
-          <label>Telefone (opcional) <input name="telefone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(41) 99999-0000"></label>
+          <label data-perfis="GERADOR">Telefone (opcional) <input name="telefone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(41) 99999-0000"></label>
+          <label data-perfis="TRANSPORTADOR">Placa do veículo <input name="placa" required maxlength="8" placeholder="ABC1D23" autocomplete="off"></label>
+        </div>
+        <div class="linha" data-perfis="RECICLADOR">
+          <label>Licença ambiental <input name="licenca" required maxlength="40" placeholder="LO-PR-2026-0001"></label>
+          <label>Capacidade (kg por mês) <input name="capacidade" type="number" inputmode="numeric" required min="1" step="1" placeholder="5000"></label>
         </div>
         <label>Senha <input name="senha" type="password" autocomplete="new-password" required minlength="8" aria-describedby="c-senha-dica">
           <small id="c-senha-dica" class="nota">Pelo menos 8 caracteres.</small></label>
 
-        <fieldset>
-          <legend>Endereço (onde o item pode ser coletado)</legend>
+        <fieldset data-perfis="GERADOR RECICLADOR">
+          <legend id="c-leg-end">Endereço (onde o item pode ser coletado)</legend>
           <div class="linha">
             <label>CEP <input name="cep" inputmode="numeric" autocomplete="postal-code" required placeholder="00000-000" aria-describedby="c-cep-dica">
               <small id="c-cep-dica" class="nota">Preenchemos a rua e a cidade pelo CEP.</small></label>
@@ -412,13 +425,41 @@ TELAS_EXTRAS.cadastro = async function cadastro() {
 
   const f = $('#f-cadastro');
   let tipo = 'PF';
-  document.querySelectorAll('#c-tipo button').forEach((b) => (b.onclick = () => {
-    tipo = b.dataset.tipo;
-    document.querySelectorAll('#c-tipo button').forEach((x) => { x.classList.toggle('ativo', x === b); x.setAttribute('aria-checked', x === b); });
+  let perfil = 'GERADOR';
+  const SUB = {
+    GERADOR: 'Para registrar seus eletrônicos, pedir a coleta e receber o certificado de destinação.',
+    TRANSPORTADOR: 'Para aceitar coletas, buscar os eletrônicos e levar até o reciclador.',
+    RECICLADOR: 'Para receber os eletrônicos, separar os componentes e emitir o certificado de destinação.',
+  };
+  const LEG_END = { GERADOR: 'Endereço (onde o item pode ser coletado)', RECICLADOR: 'Endereço da recicladora' };
+
+  function rotulosDoTipo() {
     $('#c-rot-nome').textContent = tipo === 'PF' ? 'Nome completo' : 'Razão social';
     $('#c-rot-doc').textContent = tipo === 'PF' ? 'CPF' : 'CNPJ';
     f.documento.placeholder = tipo === 'PF' ? '000.000.000-00' : '00.000.000/0000-00';
-  }));
+    f.documento.value = '';
+  }
+  function escolherTipo(novo) {
+    tipo = novo;
+    document.querySelectorAll('#c-tipo button').forEach((x) => { const sim = x.dataset.tipo === tipo; x.classList.toggle('ativo', sim); x.setAttribute('aria-checked', sim); });
+    rotulosDoTipo();
+  }
+  // Mostra só os campos do perfil escolhido; campos escondidos ficam desativados (não são validados nem enviados)
+  function aplicarPerfil() {
+    document.querySelectorAll('#c-perfil button').forEach((x) => { const sim = x.dataset.perfil === perfil; x.classList.toggle('ativo', sim); x.setAttribute('aria-checked', sim); });
+    f.querySelectorAll('[data-perfis]').forEach((el) => {
+      const mostra = el.dataset.perfis.split(' ').includes(perfil);
+      el.hidden = !mostra;
+      el.querySelectorAll('input').forEach((i) => { i.disabled = !mostra; });
+      if (el.tagName === 'LABEL') el.querySelector('input').disabled = !mostra;
+    });
+    $('#c-sub').textContent = SUB[perfil];
+    if (LEG_END[perfil]) $('#c-leg-end').textContent = LEG_END[perfil];
+    if (perfil === 'RECICLADOR') escolherTipo('PJ');   // reciclador é sempre empresa (CNPJ)
+  }
+  document.querySelectorAll('#c-perfil button').forEach((b) => (b.onclick = () => { perfil = b.dataset.perfil; aplicarPerfil(); }));
+  document.querySelectorAll('#c-tipo button').forEach((b) => (b.onclick = () => escolherTipo(b.dataset.tipo)));
+  aplicarPerfil();
 
   // Máscaras leves (aceita digitar com ou sem pontuação)
   const mascara = (campo, fmt) => campo.addEventListener('input', () => { campo.value = fmt(soDigitos(campo.value)); });
@@ -427,6 +468,7 @@ TELAS_EXTRAS.cadastro = async function cadastro() {
     ? d.slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
     : d.slice(0, 14).replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2'));
   f.uf.addEventListener('input', () => { f.uf.value = f.uf.value.replace(/[^a-z]/gi, '').toUpperCase(); });
+  f.placa.addEventListener('input', () => { f.placa.value = f.placa.value.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 7); });
 
   // Busca o endereço pelo CEP (ViaCEP, serviço público); se falhar, a pessoa digita
   f.cep.addEventListener('blur', async () => {
@@ -447,16 +489,26 @@ TELAS_EXTRAS.cadastro = async function cadastro() {
   f.onsubmit = async (e) => {
     e.preventDefault();
     if (!f.reportValidity()) return;
-    const v = Object.fromEntries(new FormData(f));
+    const v = Object.fromEntries(new FormData(f));   // campos desativados (de outro perfil) não entram
     const botao = $('#c-enviar'); botao.disabled = true; botao.textContent = 'Criando conta...';
+    const corpo = { perfil, nome: v.nome, email: v.email, senha: v.senha, tipo, documento: v.documento };
+    if (perfil === 'GERADOR') corpo.telefone = v.telefone;
+    if (perfil === 'TRANSPORTADOR') corpo.placa = v.placa;
+    if (perfil === 'RECICLADOR') { corpo.licenca = v.licenca; corpo.capacidade = Number(v.capacidade); }
+    if (perfil !== 'TRANSPORTADOR') {
+      corpo.endereco = { cep: v.cep, logradouro: v.logradouro, numero: v.numero, complemento: v.complemento, bairro: v.bairro, cidade: v.cidade, uf: v.uf };
+    }
     try {
-      const r = await api('/auth/cadastro', { metodo: 'POST', corpo: {
-        nome: v.nome, email: v.email, senha: v.senha, tipo, documento: v.documento, telefone: v.telefone,
-        endereco: { cep: v.cep, logradouro: v.logradouro, numero: v.numero, complemento: v.complemento, bairro: v.bairro, cidade: v.cidade, uf: v.uf },
-      } });
+      const r = await api('/auth/cadastro', { metodo: 'POST', corpo });
       salvarSessao({ token: r.token, usuario: r.usuario });
-      avisar(`Conta criada. Bem-vindo, ${r.usuario.nome.split(' ')[0]}! Registre o seu primeiro eletrônico.`);
-      ir('novo');
+      const primeiro = r.usuario.nome.split(' ')[0];
+      const MSG = {
+        GERADOR: `Conta criada. Bem-vindo, ${primeiro}! Registre o seu primeiro eletrônico.`,
+        TRANSPORTADOR: `Conta criada. Bem-vindo, ${primeiro}! Veja as coletas disponíveis para aceitar.`,
+        RECICLADOR: `Conta criada. Bem-vindo, ${primeiro}! As coletas destinadas a você aparecem aqui.`,
+      };
+      avisar(MSG[r.usuario.perfil] || `Conta criada. Bem-vindo, ${primeiro}!`);
+      ir(r.usuario.perfil === 'GERADOR' ? 'novo' : telaInicial(r.usuario.perfil));
     } catch (err) {
       if (err instanceof TelaTrocada) return;
       avisar(err.message, true);

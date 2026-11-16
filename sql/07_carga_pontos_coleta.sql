@@ -16,6 +16,7 @@ START TRANSACTION;
 -- Tabela temporária: cada linha vira um endereço + um ponto de coleta
 DROP TEMPORARY TABLE IF EXISTS tmp_ponto;
 CREATE TEMPORARY TABLE tmp_ponto (
+  _pk INT AUTO_INCREMENT PRIMARY KEY INVISIBLE, -- o Aiven exige chave primária em toda tabela
   id_externo INT NULL, nome VARCHAR(120), logradouro VARCHAR(150), numero VARCHAR(10), bairro VARCHAR(80),
   cidade VARCHAR(80), uf CHAR(2), cep CHAR(8), canal VARCHAR(40), latitude DECIMAL(9,6), longitude DECIMAL(9,6),
   origem ENUM('ABREE','FICTICIO'));

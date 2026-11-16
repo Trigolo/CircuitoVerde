@@ -130,7 +130,7 @@ BEGIN
 
   -- Modelo de desmontagem: componentes (fração do peso) e materiais (fração do componente)
   DROP TEMPORARY TABLE IF EXISTS tmp_modelo;
-  CREATE TEMPORARY TABLE tmp_modelo (tipo VARCHAR(60), comp VARCHAR(80), frac DECIMAL(4,3), reap BOOLEAN, material VARCHAR(60), mfrac DECIMAL(4,3));
+  CREATE TEMPORARY TABLE tmp_modelo (_pk INT AUTO_INCREMENT PRIMARY KEY INVISIBLE, tipo VARCHAR(60), comp VARCHAR(80), frac DECIMAL(4,3), reap BOOLEAN, material VARCHAR(60), mfrac DECIMAL(4,3));
   INSERT INTO tmp_modelo VALUES
    ('Smartphone','Bateria',.250,0,'Bateria de lítio',1), ('Smartphone','Placa principal',.200,0,'Placa de circuito',.900), ('Smartphone','Placa principal',.200,0,'Cobre',.100),
    ('Smartphone','Carcaça',.300,0,'Plástico ABS',.600), ('Smartphone','Carcaça',.300,0,'Alumínio',.400), ('Smartphone','Tela',.250,0,'Vidro',1),
@@ -272,7 +272,7 @@ BEGIN
   -- ---------- 4.5 Destino final dos componentes ----------
   -- 85% dos itens entregues têm todos os componentes destinados; os demais ficam com pendência
   DROP TEMPORARY TABLE IF EXISTS tmp_entregue;
-  CREATE TEMPORARY TABLE tmp_entregue AS
+  CREATE TEMPORARY TABLE tmp_entregue (_pk INT AUTO_INCREMENT PRIMARY KEY INVISIBLE) AS
   SELECT l.id_item, l.id_reciclador, l.data_entrega, (RAND() < 0.85) AS completo
     FROM logistica_reversa l
    WHERE l.status = 'ENTREGUE' AND l.id_item BETWEEN v_item_ini AND v_item_fim;

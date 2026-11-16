@@ -47,7 +47,11 @@ router.get('/', permitir('TRANSPORTADOR', 'RECICLADOR', 'ADMIN'), rota(async (re
   }
   const filtro = condicoes.length ? 'WHERE ' + condicoes.join(' AND ') : '';
   const [linhas] = await pool.query(`
-    SELECT l.*, t.nome AS equipamento, i.peso_kg, ur.nome AS reciclador
+    SELECT l.*, t.nome AS equipamento, i.peso_kg, ur.nome AS reciclador,
+           (SELECT COUNT(*) FROM componente c WHERE c.id_item = l.id_item) AS componentes,
+           (SELECT COUNT(*) FROM componente c LEFT JOIN destino_final d ON d.id_componente = c.id_componente
+             WHERE c.id_item = l.id_item AND d.id_destino IS NULL) AS sem_destino,
+           (SELECT ce.codigo FROM certificado ce WHERE ce.id_item = l.id_item) AS certificado
       FROM logistica_reversa l
       JOIN item_eletronico i  ON i.id_item = l.id_item
       JOIN tipo_equipamento t ON t.id_tipo = i.id_tipo
@@ -68,6 +72,9 @@ router.patch('/:id/status', permitir('TRANSPORTADOR', 'RECICLADOR', 'ADMIN'), ro
   if (!atual) return res.status(404).json({ erro: 'Coleta não encontrada.' });
   if (req.usuario.perfil === 'RECICLADOR' && atual.id_reciclador !== await idDoAtor(pool, 'reciclador', req.usuario.id_usuario)) {
     return res.status(403).json({ erro: 'Esta coleta é de outro reciclador.' });
+  }
+  if (req.usuario.perfil === 'RECICLADOR' && status !== 'ENTREGUE') {   // agendar e transportar é com o transportador
+    return res.status(403).json({ erro: 'O reciclador só confirma o recebimento (Entregue).' });
   }
   if (req.usuario.perfil === 'TRANSPORTADOR' && atual.id_transportador !== null
       && atual.id_transportador !== await idDoAtor(pool, 'transportador', req.usuario.id_usuario)) {

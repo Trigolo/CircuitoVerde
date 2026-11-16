@@ -52,53 +52,83 @@ router.post('/login', limiteLogin, rota(async (req, res) => {
   res.json({ token: gerarToken(u), usuario: { id: u.id_usuario, nome: u.nome, email: u.email, perfil: u.perfil } });
 }));
 
-// POST /api/auth/cadastro -> cria uma conta de GERADOR (pessoa ou empresa) e já entra
-// { nome, email, senha, tipo: 'PF'|'PJ', documento, telefone?,
-//   endereco: { cep, logradouro, numero, complemento?, bairro, cidade, uf } }
-// Usuário, endereço e gerador são gravados numa TRANSAÇÃO: ou entra tudo, ou nada.
+// POST /api/auth/cadastro -> cria a conta e já entra. Perfis que a pessoa pode escolher:
+//   GERADOR       { tipo: 'PF'|'PJ', documento, telefone?, endereco }
+//   TRANSPORTADOR { tipo: 'PF'|'PJ', documento, placa }                 (sem endereço)
+//   RECICLADOR    { documento (CNPJ), licenca, capacidade, endereco }    (sempre empresa)
+// Comum a todos: { perfil, nome, email, senha }. ADMIN e AUDITOR não se cadastram pelo site.
+// Tudo é gravado numa TRANSAÇÃO: ou entra tudo, ou nada.
 const limiteCadastro = limitar({ max: 10, janelaMin: 60 });
 const soNumeros = (v) => String(v || '').replace(/\D/g, '');
+const PERFIS_CADASTRO = ['GERADOR', 'TRANSPORTADOR', 'RECICLADOR'];
 
 router.post('/cadastro', limiteCadastro, rota(async (req, res) => {
   req.falhou();   // toda tentativa de cadastro conta no limite (no máximo 10 por hora por IP)
   const b = req.body || {};
   const e = b.endereco || {};
+  const perfil = PERFIS_CADASTRO.includes(b.perfil) ? b.perfil : 'GERADOR';
   const nome = String(b.nome || '').trim();
   const email = String(b.email || '').trim().toLowerCase();
-  const tipo = b.tipo === 'PJ' ? 'PJ' : 'PF';
+  const tipo = perfil === 'RECICLADOR' ? 'PJ' : (b.tipo === 'PJ' ? 'PJ' : 'PF');
   const documento = soNumeros(b.documento);
   const cep = soNumeros(e.cep);
   const uf = String(e.uf || '').trim().toUpperCase();
+  const placa = String(b.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const licenca = String(b.licenca || '').trim();
+  const capacidade = Number(b.capacidade);
+  const temEndereco = perfil !== 'TRANSPORTADOR';
 
   const faltando = [];
   if (nome.length < 3) faltando.push('nome');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) faltando.push('e-mail válido');
   if (String(b.senha || '').length < 8) faltando.push('senha com 8 caracteres ou mais');
   if (documento.length !== (tipo === 'PF' ? 11 : 14)) faltando.push(tipo === 'PF' ? 'CPF com 11 números' : 'CNPJ com 14 números');
-  if (cep.length !== 8) faltando.push('CEP com 8 números');
-  if (!String(e.logradouro || '').trim() || !String(e.numero || '').trim() || !String(e.bairro || '').trim() || !String(e.cidade || '').trim()) faltando.push('endereço completo');
-  if (!/^[A-Z]{2}$/.test(uf)) faltando.push('UF');
+  if (temEndereco) {
+    if (cep.length !== 8) faltando.push('CEP com 8 números');
+    if (!String(e.logradouro || '').trim() || !String(e.numero || '').trim() || !String(e.bairro || '').trim() || !String(e.cidade || '').trim()) faltando.push('endereço completo');
+    if (!/^[A-Z]{2}$/.test(uf)) faltando.push('UF');
+  }
+  if (perfil === 'TRANSPORTADOR' && !/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placa)) faltando.push('placa do veículo (ex.: ABC1D23)');
+  if (perfil === 'RECICLADOR') {
+    if (licenca.length < 3) faltando.push('licença ambiental');
+    if (!(capacidade > 0)) faltando.push('capacidade em kg por mês');
+  }
   if (faltando.length) { return res.status(400).json({ erro: 'Confira: ' + faltando.join(', ') + '.' }); }
 
   const [[jaEmail]] = await pool.query('SELECT 1 FROM usuario WHERE email = ?', [email]);
   if (jaEmail) return res.status(409).json({ erro: 'Já existe uma conta com este e-mail. Use "Entrar".' });
-  const [[jaDoc]] = await pool.query('SELECT 1 FROM gerador WHERE documento = ?', [documento]);
+  const tabelaDoc = { GERADOR: ['gerador', 'documento'], TRANSPORTADOR: ['transportador', 'documento'], RECICLADOR: ['reciclador', 'cnpj'] }[perfil];
+  const [[jaDoc]] = await pool.query(`SELECT 1 FROM ${tabelaDoc[0]} WHERE ${tabelaDoc[1]} = ?`, [documento]);
   if (jaDoc) return res.status(409).json({ erro: `Este ${tipo === 'PF' ? 'CPF' : 'CNPJ'} já está cadastrado.` });
 
   const hash = await bcrypt.hash(String(b.senha), 10);
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [u] = await conn.query("INSERT INTO usuario (nome, email, senha_hash, perfil) VALUES (?, ?, ?, 'GERADOR')", [nome, email, hash]);
-    const [end] = await conn.query(
-      'INSERT INTO endereco (logradouro, numero, complemento, bairro, cidade, uf, cep) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [String(e.logradouro).trim(), String(e.numero).trim().slice(0, 10), e.complemento ? String(e.complemento).trim().slice(0, 60) : null,
-        String(e.bairro).trim(), String(e.cidade).trim(), uf, cep]);
-    await conn.query('INSERT INTO gerador (id_usuario, id_endereco, tipo, documento, telefone) VALUES (?, ?, ?, ?, ?)',
-      [u.insertId, end.insertId, tipo, documento, soNumeros(b.telefone).slice(0, 15) || null]);
+    const [u] = await conn.query('INSERT INTO usuario (nome, email, senha_hash, perfil) VALUES (?, ?, ?, ?)', [nome, email, hash, perfil]);
+    let idEndereco = null;
+    if (temEndereco) {
+      const [end] = await conn.query(
+        'INSERT INTO endereco (logradouro, numero, complemento, bairro, cidade, uf, cep) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [String(e.logradouro).trim(), String(e.numero).trim().slice(0, 10), e.complemento ? String(e.complemento).trim().slice(0, 60) : null,
+          String(e.bairro).trim(), String(e.cidade).trim(), uf, cep]);
+      idEndereco = end.insertId;
+    }
+    if (perfil === 'GERADOR') {
+      await conn.query('INSERT INTO gerador (id_usuario, id_endereco, tipo, documento, telefone) VALUES (?, ?, ?, ?, ?)',
+        [u.insertId, idEndereco, tipo, documento, soNumeros(b.telefone).slice(0, 15) || null]);
+    } else if (perfil === 'TRANSPORTADOR') {
+      await conn.query('INSERT INTO transportador (id_usuario, documento, placa_veiculo) VALUES (?, ?, ?)', [u.insertId, documento, placa]);
+    } else {
+      const [r] = await conn.query(
+        'INSERT INTO reciclador (id_usuario, id_endereco, cnpj, licenca_ambiental, capacidade_kg_mes) VALUES (?, ?, ?, ?, ?)',
+        [u.insertId, idEndereco, documento, licenca.slice(0, 40), Math.min(capacidade, 99999999)]);
+      // Começa aceitando todos os materiais (pode ser ajustado depois no banco)
+      await conn.query('INSERT INTO reciclador_material (id_reciclador, id_material) SELECT ?, id_material FROM material', [r.insertId]);
+    }
     await conn.commit();
-    const novo = { id_usuario: u.insertId, nome, perfil: 'GERADOR' };
-    res.status(201).json({ token: gerarToken(novo), usuario: { id: u.insertId, nome, email, perfil: 'GERADOR' } });
+    const novo = { id_usuario: u.insertId, nome, perfil };
+    res.status(201).json({ token: gerarToken(novo), usuario: { id: u.insertId, nome, email, perfil } });
   } catch (err) {
     await conn.rollback();
     throw err;

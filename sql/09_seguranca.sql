@@ -34,6 +34,9 @@ GRANT SELECT ON circuitoverde.* TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.usuario             TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.endereco            TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.gerador             TO 'cv_papel_app';
+GRANT INSERT ON circuitoverde.transportador       TO 'cv_papel_app';   -- cadastro de transportador
+GRANT INSERT ON circuitoverde.reciclador          TO 'cv_papel_app';   -- cadastro de reciclador
+GRANT INSERT ON circuitoverde.reciclador_material TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.item_eletronico     TO 'cv_papel_app';
 GRANT INSERT, UPDATE ON circuitoverde.logistica_reversa TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.componente          TO 'cv_papel_app';
@@ -70,9 +73,9 @@ BEGIN
   END IF;
 END //
 DELIMITER ;
-CALL sp_grant_se_existir('assistente_conversa',       "GRANT INSERT ON circuitoverde.assistente_conversa TO 'cv_papel_app'");
-CALL sp_grant_se_existir('vw_assistente_uso',         "GRANT SELECT ON circuitoverde.vw_assistente_uso TO 'cv_papel_relatorio'");
-CALL sp_grant_se_existir('vw_assistente_ferramentas', "GRANT SELECT ON circuitoverde.vw_assistente_ferramentas TO 'cv_papel_relatorio'");
+CALL sp_grant_se_existir('assistente_conversa',       'GRANT INSERT ON circuitoverde.assistente_conversa TO ''cv_papel_app''');
+CALL sp_grant_se_existir('vw_assistente_uso',         'GRANT SELECT ON circuitoverde.vw_assistente_uso TO ''cv_papel_relatorio''');
+CALL sp_grant_se_existir('vw_assistente_ferramentas', 'GRANT SELECT ON circuitoverde.vw_assistente_ferramentas TO ''cv_papel_relatorio''');
 DROP PROCEDURE sp_grant_se_existir;
 
 -- ---------- 3. Auditoria (leitura total, nenhuma escrita) ----------
@@ -80,7 +83,18 @@ GRANT SELECT, SHOW VIEW ON circuitoverde.* TO 'cv_papel_auditor';
 
 -- ---------- 4. Backup (mysqldump com views, triggers e procedures) ----------
 GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES, EVENT ON circuitoverde.* TO 'cv_papel_backup';
-GRANT PROCESS, SHOW_ROUTINE ON *.* TO 'cv_papel_backup';
+-- Permissão global: em banco gerenciado (Aiven) o admin não pode concedê-la; aí o script avisa e segue
+DROP PROCEDURE IF EXISTS sp_grant_global_backup;
+DELIMITER //
+CREATE PROCEDURE sp_grant_global_backup()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR 1227, 1045, 1410
+    SELECT 'PULADO: sem permissão para PROCESS/SHOW_ROUTINE (normal em banco gerenciado como o Aiven).' AS resultado;
+  GRANT PROCESS, SHOW_ROUTINE ON *.* TO 'cv_papel_backup';
+END //
+DELIMITER ;
+CALL sp_grant_global_backup();
+DROP PROCEDURE sp_grant_global_backup;
 
 -- ---------- Usuários (TROQUE AS SENHAS antes de usar de verdade) ----------
 -- Bloqueio por 1 dia após 5 senhas erradas seguidas (exceto o cv_app).

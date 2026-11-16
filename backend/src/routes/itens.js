@@ -103,6 +103,12 @@ router.get('/:id', rota(async (req, res) => {
 
 // POST /api/itens/:id/certificado  (RECICLADOR ou ADMIN) -> chama a stored procedure
 router.post('/:id/certificado', permitir('RECICLADOR', 'ADMIN'), rota(async (req, res) => {
+  if (req.usuario.perfil === 'RECICLADOR') {   // o reciclador só certifica itens entregues a ele
+    const idRec = await idDoAtor(pool, 'reciclador', req.usuario.id_usuario);
+    const [[dele]] = await pool.query(
+      "SELECT 1 FROM logistica_reversa WHERE id_item = ? AND id_reciclador = ? AND status = 'ENTREGUE'", [Number(req.params.id), idRec]);
+    if (!dele) return res.status(403).json({ erro: 'Só é possível certificar itens entregues a você.' });
+  }
   const conn = await pool.getConnection();
   try {
     await conn.query('CALL sp_emitir_certificado(?, @codigo)', [Number(req.params.id)]);

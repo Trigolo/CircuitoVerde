@@ -424,3 +424,18 @@ tr[hidden] { display: none; }
   .topo-site .marca-texto strong { font-size: 17px; }
   #btn-entrar { padding: 8px 14px !important; }
 }
+
+/* Criar conta: escolha do perfil */
+.cadastro [hidden] { display: none !important; }
+#c-perfil { flex-wrap: wrap; max-width: 100%; }
+@media (max-width: 480px) { #c-perfil { display: flex; } #c-perfil button { flex: 1 1 100%; } }
+
+/* Reciclagem: resumo em 3 colunas e etapa de cada item */
+.r-resumo { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 560px) { .r-resumo { grid-template-columns: 1fr 1fr 1fr; gap: 8px; } .r-resumo .kpi .valor { font-size: 22px; } }
+.etapa { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.etapa-pendente  { background: rgba(245, 158, 11, .15); color: #B45309; }
+.etapa-pronto    { background: rgba(16, 185, 129, .15); color: #047857; }
+.etapa-concluido { background: rgba(100, 116, 139, .15); color: var(--texto-2); }
+:root[data-tema="escuro"] .etapa-pendente { color: #FBBF24; }
+:root[data-tema="escuro"] .etapa-pronto { color: #34D399; }
