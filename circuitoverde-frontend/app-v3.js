@@ -731,4 +731,5 @@ TELAS_EXTRAS.gpontos = async function gpontos() {
 };
 
 // ---------- 7. Início ----------
-iniciarApp('inicio');
+// Espera os outros scripts (app-v5.js registra telas novas) antes de abrir a primeira tela
+addEventListener('DOMContentLoaded', () => iniciarApp('inicio'));

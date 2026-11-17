@@ -620,9 +620,19 @@ async function validar(codigoInicial) {
   const checar = async (codigo) => {
     try {
       const c = await api('/certificados/' + encodeURIComponent(codigo.trim()));
+      const base = location.protocol === 'file:' ? 'http://localhost:3000/' : location.origin + location.pathname;
+      const qr = qrcode(0, 'M'); qr.addData(`${base}#/validar/${c.codigo}`); qr.make();
       $('#res-validar').innerHTML = `
         <div class="ok"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
           Certificado válido: o equipamento teve destino ambientalmente correto.</div>
+        <div class="cert-selo-linha">
+          <div class="cert-selo" aria-hidden="true"><svg viewBox="0 0 120 120"><defs><path id="arco-selo" d="M60 60 m-44 0 a44 44 0 1 1 88 0 a44 44 0 1 1 -88 0"/></defs>
+            <circle cx="60" cy="60" r="56" class="s1"/><circle cx="60" cy="60" r="36" class="s2"/>
+            <text class="s3"><textPath href="#arco-selo" startOffset="2%">DESTINO COMPROVADO · CIRCUITOVERDE ·</textPath></text>
+            <path d="m46 61 10 10 19-21" class="s4"/></svg></div>
+          <div class="cert-qr">${qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true })}<small>Aponte a câmera para conferir</small></div>
+          <div class="cert-codigo"><span>Código do certificado</span><code>${esc(c.codigo)}</code></div>
+        </div>
         <div class="dados-cert">
           <div><span>Equipamento</span><b>${esc(c.equipamento)} · item nº ${c.id_item}</b></div>
           <div><span>Emitido em</span><b>${dataBR(c.data_emissao)}</b></div>

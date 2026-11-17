@@ -45,6 +45,11 @@ GRANT INSERT ON circuitoverde.componente_material TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.destino_final       TO 'cv_papel_app';
 -- status_logistica e certificado são gravados pelo trigger e pela procedure
 -- (rodam com o privilégio de quem os criou), então a API não precisa de INSERT nelas.
+-- Perfil do usuário (14_perfil_auditoria.sql): permissão POR COLUNA, a API nunca muda o perfil nem o "ativo"
+GRANT UPDATE (nome, email, senha_hash) ON circuitoverde.usuario TO 'cv_papel_app';
+GRANT UPDATE (telefone) ON circuitoverde.gerador TO 'cv_papel_app';
+GRANT UPDATE (placa_veiculo) ON circuitoverde.transportador TO 'cv_papel_app';
+GRANT UPDATE (licenca_ambiental, capacidade_kg_mes) ON circuitoverde.reciclador TO 'cv_papel_app';
 GRANT EXECUTE ON PROCEDURE circuitoverde.sp_emitir_certificado TO 'cv_papel_app';
 GRANT EXECUTE ON FUNCTION  circuitoverde.fn_distancia_km       TO 'cv_papel_app';
 

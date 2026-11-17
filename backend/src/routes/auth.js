@@ -137,6 +137,75 @@ router.post('/cadastro', limiteCadastro, rota(async (req, res) => {
   }
 }));
 
+// ---------- Perfil do usuário logado ----------
+// GET /api/auth/perfil -> dados da conta e do papel (gerador, transportador ou reciclador)
+router.get('/perfil', autenticar, rota(async (req, res) => {
+  const { id_usuario, perfil } = req.usuario;
+  const [[u]] = await pool.query('SELECT id_usuario, nome, email, login, perfil, criado_em FROM usuario WHERE id_usuario = ?', [id_usuario]);
+  if (!u) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+  let papel = null;
+  if (perfil === 'GERADOR') {
+    [[papel]] = await pool.query(`SELECT g.tipo, g.documento, g.telefone, e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep
+      FROM gerador g JOIN endereco e ON e.id_endereco = g.id_endereco WHERE g.id_usuario = ?`, [id_usuario]);
+  } else if (perfil === 'TRANSPORTADOR') {
+    [[papel]] = await pool.query('SELECT documento, placa_veiculo FROM transportador WHERE id_usuario = ?', [id_usuario]);
+  } else if (perfil === 'RECICLADOR') {
+    [[papel]] = await pool.query(`SELECT r.cnpj AS documento, r.licenca_ambiental, r.capacidade_kg_mes, e.logradouro, e.numero, e.bairro, e.cidade, e.uf, e.cep
+      FROM reciclador r JOIN endereco e ON e.id_endereco = r.id_endereco WHERE r.id_usuario = ?`, [id_usuario]);
+  }
+  res.json({ ...u, papel: papel || null });
+}));
+
+// PUT /api/auth/perfil { nome, email, telefone?, placa?, licenca?, capacidade? } -> atualiza e devolve um token novo (o nome vai no token)
+router.put('/perfil', autenticar, rota(async (req, res) => {
+  const { id_usuario, perfil } = req.usuario;
+  const b = req.body || {};
+  const nome = String(b.nome || '').trim();
+  const email = String(b.email || '').trim().toLowerCase();
+  const faltando = [];
+  if (nome.length < 3) faltando.push('nome');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) faltando.push('e-mail válido');
+  const placa = String(b.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (perfil === 'TRANSPORTADOR' && !/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placa)) faltando.push('placa (ex.: ABC1D23)');
+  const capacidade = Number(b.capacidade);
+  if (perfil === 'RECICLADOR' && !(capacidade > 0)) faltando.push('capacidade em kg por mês');
+  if (perfil === 'RECICLADOR' && String(b.licenca || '').trim().length < 3) faltando.push('licença ambiental');
+  if (faltando.length) return res.status(400).json({ erro: 'Confira: ' + faltando.join(', ') + '.' });
+  const [[outro]] = await pool.query('SELECT 1 FROM usuario WHERE email = ? AND id_usuario <> ?', [email, id_usuario]);
+  if (outro) return res.status(409).json({ erro: 'Este e-mail já é usado por outra conta.' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('UPDATE usuario SET nome = ?, email = ? WHERE id_usuario = ?', [nome.slice(0, 120), email, id_usuario]);
+    if (perfil === 'GERADOR') await conn.query('UPDATE gerador SET telefone = ? WHERE id_usuario = ?', [soNumeros(b.telefone).slice(0, 15) || null, id_usuario]);
+    if (perfil === 'TRANSPORTADOR') await conn.query('UPDATE transportador SET placa_veiculo = ? WHERE id_usuario = ?', [placa, id_usuario]);
+    if (perfil === 'RECICLADOR') {
+      await conn.query('UPDATE reciclador SET licenca_ambiental = ?, capacidade_kg_mes = ? WHERE id_usuario = ?',
+        [String(b.licenca).trim().slice(0, 40), Math.min(capacidade, 99999999), id_usuario]);
+    }
+    await conn.commit();
+  } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+  const atualizado = { id_usuario, nome, perfil };
+  res.json({ token: gerarToken(atualizado), usuario: { id: id_usuario, nome, email, perfil }, mensagem: 'Dados atualizados.' });
+}));
+
+// PUT /api/auth/senha { atual, nova } -> troca a senha (confere a atual; 5 erros em 15 min bloqueiam)
+const limiteSenha = limitar({ max: 5, janelaMin: 15, chave: (req) => 'senha:' + (req.usuario?.id_usuario || req.ip) });
+router.put('/senha', autenticar, limiteSenha, rota(async (req, res) => {
+  const { atual, nova } = req.body || {};
+  if (String(nova || '').length < 8) return res.status(400).json({ erro: 'A nova senha precisa ter pelo menos 8 caracteres.' });
+  if (atual === nova) return res.status(400).json({ erro: 'A nova senha precisa ser diferente da atual.' });
+  const [[u]] = await pool.query('SELECT senha_hash FROM usuario WHERE id_usuario = ?', [req.usuario.id_usuario]);
+  if (!u || !(await bcrypt.compare(String(atual || ''), u.senha_hash))) {
+    req.falhou();
+    return res.status(400).json({ erro: 'A senha atual não confere.' });
+  }
+  await pool.query('UPDATE usuario SET senha_hash = ? WHERE id_usuario = ?', [await bcrypt.hash(String(nova), 10), req.usuario.id_usuario]);
+  req.limparTentativas();
+  res.json({ mensagem: 'Senha alterada.' });
+}));
+
 // GET /api/auth/eu  -> dados do usuário logado
 router.get('/eu', autenticar, (req, res) => res.json(req.usuario));
 

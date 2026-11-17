@@ -39,6 +39,8 @@ sql/
   11_usuario_gustavo.sql login por nome de usuário e o usuário Gustavo em todos os perfis (senha Gustavo)
   12_demo_reciclador.sql  itens de demonstração do Gustavo em cada etapa da reciclagem (a caminho, sem componentes, sem destino, pronto para certificar)
   13_gestao_pontos.sql    cadastro e aprovação de pontos de coleta: status (pendente/aprovado/rejeitado), histórico por trigger e view de gestão
+  14_perfil_auditoria.sql índice da trilha de auditoria e permissões POR COLUNA para a API editar o perfil
+  backup-aiven.bat        backup do banco da nuvem (Aiven) com mysqldump; pede a senha na hora
   backup.bat             backup com mysqldump (dados, views, triggers e procedures)
   restaurar.bat          restaura um backup
 backend/
@@ -78,7 +80,7 @@ circuitoverde-frontend/
 
 ### Banco
 1. Abra o MySQL Workbench e conecte ao seu servidor MySQL 8.
-2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql`, `sql/09_seguranca.sql`, `sql/10_indices.sql`, `sql/11_usuario_gustavo.sql`, `sql/12_demo_reciclador.sql`, `sql/13_gestao_pontos.sql` e `sql/03_consultas.sql`.
+2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql`, `sql/09_seguranca.sql`, `sql/10_indices.sql`, `sql/11_usuario_gustavo.sql`, `sql/12_demo_reciclador.sql`, `sql/13_gestao_pontos.sql`, `sql/14_perfil_auditoria.sql` e `sql/03_consultas.sql`.
    Para entrar no site: usuário **Gustavo**, senha **Gustavo** e o perfil desejado.
 3. Troque as senhas dos usuários no fim do `09_seguranca.sql` e use o `cv_app` no `.env` da API (`DB_USER=cv_app`). Em desenvolvimento dá para continuar com o `root`.
 
@@ -176,3 +178,14 @@ Bibliotecas do frontend ficam na pasta `vendor` (D3, TopoJSON, Leaflet, qrcode-g
 ## Globo (tela Mundo)
 
 Atmosfera, iluminação e a **noite em tempo real** (calculada pela posição do Sol), países pintados pela % sem destino documentado (o Brasil pelo dado do próprio país), os pontos de coleta aprovados como luzes, botão **Pontos no Brasil** e **linha do tempo** com play que anima 2019 → 2022 → 2026 (estimativa).
+
+## Versão 5: qualidade e operação
+
+- **Testes automáticos:** `cd backend` e `npm test`. São 28 testes (node:test, sem instalar nada) cobrindo login, cadastro, permissões de cada perfil, regras da reciclagem, aprovação de pontos (com o trigger de histórico), perfil e troca de senha. Rodam no banco local do `.env`; por segurança se recusam a rodar no banco da nuvem.
+- **Relatórios** (Admin e Auditor): indicadores, gráfico de descartes por mês, materiais recuperados, situação das coletas, recicladores mais rápidos e cidades, com exportação em **CSV** (abre no Excel).
+- **Auditoria** (Admin e Auditor): trilha gravada pelos triggers (coletas e pontos de coleta), com busca e CSV.
+- **Notificações:** sininho no topo com os avisos de cada perfil (coleta agendada, item entregue, ponto aprovado, certificado emitido...), montados a partir do histórico do banco.
+- **Meu perfil:** clique no seu nome no topo. Edita nome, e-mail e os dados do papel; troca de senha conferindo a atual. A API só pode alterar essas colunas (`GRANT UPDATE (nome, email, senha_hash)`).
+- **Certificado:** a validação mostra selo, QR Code e código.
+- **Site sempre acordado:** `.github/workflows/manter-acordado.yml` acessa o site a cada 10 min (7h às 23h).
+- **Backup da nuvem:** `sql\backup-aiven.bat`.

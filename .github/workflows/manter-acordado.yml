@@ -1,0 +1,24 @@
+# Mantém o site do Render acordado no plano grátis (ele "dorme" após ~15 min sem acesso).
+# O GitHub roda isto sozinho a cada 10 minutos, das 7h às 23h (horário de Brasília).
+# Pode desligar em: GitHub > Actions > Manter o site acordado > ... > Disable workflow.
+name: Manter o site acordado
+
+on:
+  schedule:
+    - cron: '*/10 10-23,0-2 * * *'   # UTC: 10h-02h = 7h-23h em Brasília
+  workflow_dispatch: {}               # botão "Run workflow" para testar na hora
+
+jobs:
+  acordar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Acessar a API (acorda o site e o banco)
+        run: |
+          for tentativa in 1 2 3; do
+            if curl -fsS --max-time 90 https://circuitoverde.onrender.com/api/saude; then
+              echo; echo "Site acordado."; exit 0
+            fi
+            echo "Tentativa $tentativa falhou, esperando 20 s..."; sleep 20
+          done
+          exit 1

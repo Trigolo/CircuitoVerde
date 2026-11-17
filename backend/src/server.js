@@ -44,9 +44,14 @@ app.use('/api/indicadores', require('./routes/indicadores'));
 app.use('/api/pontos',      require('./routes/pontos'));     // versão 2: geolocalização
 app.use('/api',             require('./routes/impacto'));    // versão 2: panorama, calculadora, ranking, certificado
 app.use('/api/assistente',  require('./routes/assistente')); // assistente virtual (Gemini + regras)
+app.use('/api',             require('./routes/gestao'));     // versão 5: relatórios, auditoria e notificações
 
 app.use((req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));
 app.use(tratarErros);
 
-const porta = process.env.PORT || 3000;
-app.listen(porta, () => console.log(`API CircuitoVerde rodando em http://localhost:${porta}`));
+// Exporta o app para os testes automáticos (npm test); só abre a porta quando roda direto (npm start)
+module.exports = app;
+if (require.main === module) {
+  const porta = process.env.PORT || 3000;
+  app.listen(porta, () => console.log(`API CircuitoVerde rodando em http://localhost:${porta}`));
+}

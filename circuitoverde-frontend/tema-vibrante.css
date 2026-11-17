@@ -526,3 +526,71 @@ tr[hidden] { display: none; }
   .globo-v2 .leg-itens { display: none; }
   .globo-v2 .globo-legenda { padding: 6px 8px; }
 }
+
+/* ---------- Versão 5: relatórios, auditoria, perfil e notificações ---------- */
+.btn-csv svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-csv { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.r5-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.r5-largo { grid-column: 1 / -1; }
+.r5-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.r5-graf { width: 100%; height: 240px; display: block; }
+.r5-coluna { fill: url(#grad-logo); fill: var(--serie-1); transition: opacity .15s; }
+.r5-coluna:hover { opacity: .8; }
+.eixo text { fill: var(--texto-2); font-size: 11px; }
+.eixo line { stroke: var(--borda); }
+.eixo path { stroke: var(--borda); }
+.r5-pilha { display: flex; height: 18px; border-radius: 999px; overflow: hidden; gap: 2px; margin: 8px 0 10px; }
+.r5-pilha span { min-width: 4px; }
+.r5-legenda { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--texto-2); }
+.r5-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.r5-legenda i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.st-SOLICITADA { background: #94A3B8; } .st-AGENDADA { background: #6366F1; } .st-EM_TRANSITO { background: #F59E0B; }
+.st-ENTREGUE { background: #10B981; } .st-CANCELADA { background: #EF4444; }
+@media (max-width: 860px) { .r5-grade { grid-template-columns: 1fr; } }
+
+.perfil-grade { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+.perfil-cartao { text-align: center; }
+.perfil-avatar { width: 84px; height: 84px; border-radius: 50%; margin: 6px auto 12px; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: #fff; background: var(--grad); box-shadow: var(--sombra-cor); }
+.perfil-cartao h2 { margin-bottom: 8px; }
+.perfil-cartao dl { text-align: left; margin: 18px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+.perfil-cartao dt { font-size: 12px; color: var(--texto-2); }
+.perfil-cartao dd { margin: 0; font-weight: 600; }
+.forca { height: 6px; border-radius: 999px; background: var(--borda); position: relative; margin: 2px 0 18px; }
+.forca span { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; transition: width .2s, background .2s; }
+.forca small { position: absolute; top: 8px; left: 0; font-size: 12px; color: var(--texto-2); }
+.forca.fraca span { background: #EF4444; } .forca.media span { background: #F59E0B; } .forca.forte span { background: #10B981; }
+@media (max-width: 860px) { .perfil-grade { grid-template-columns: 1fr; } }
+
+.notif { position: relative; }
+#notif-botao { position: relative; }
+#notif-botao svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.notif-conta { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #EF4444; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--superficie); }
+.notif-lista { position: absolute; right: 0; top: calc(100% + 10px); width: min(360px, calc(100vw - 24px)); max-height: 440px; overflow: auto; padding: 6px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 16px; box-shadow: var(--sombra-forte); z-index: 40; animation: surgir .18s ease-out; }
+.notif-lista[hidden] { display: none; }
+.notif-topo { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; }
+.notif-item { display: flex; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 10px; border-radius: 12px; cursor: pointer; font: inherit; color: var(--texto); }
+.notif-item:hover { background: var(--hover); }
+.notif-item span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.notif-item small { color: var(--texto-2); font-size: 13px; }
+.notif-item em { font-style: normal; font-size: 11px; color: var(--texto-3, var(--texto-2)); }
+.notif-ponto { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; background: var(--borda); }
+.notif-item.nova .notif-ponto { background: #3B82F6; }
+.notif-item.nova.notif-sucesso .notif-ponto { background: #10B981; }
+.notif-item.nova.notif-alerta .notif-ponto { background: #F59E0B; }
+.notif-item.nova b { font-weight: 800; }
+.sessao .usuario.clicavel .avatar:hover { box-shadow: 0 0 0 3px rgba(16, 185, 129, .35); }
+@media (max-width: 860px) { .notif-lista { position: fixed; right: 12px; top: 64px; } }
+
+/* Certificado validado: selo, QR e código */
+.cert-selo-linha { display: grid; grid-template-columns: 120px 120px minmax(0, 1fr); gap: 20px; align-items: center; margin: 16px 0; padding: 16px; border-radius: 18px; background: linear-gradient(135deg, rgba(16, 185, 129, .08), rgba(99, 102, 241, .08)); border: 1px solid var(--borda); }
+.cert-selo svg { width: 120px; height: 120px; display: block; animation: surgir .4s ease-out; }
+.cert-selo .s1 { fill: #10B981; } .cert-selo .s2 { fill: #fff; } .cert-selo .s4 { fill: none; stroke: #059669; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.cert-selo .s3 { fill: #fff; font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px; }
+.cert-qr { text-align: center; } .cert-qr svg { width: 110px; height: 110px; background: #fff; padding: 6px; border-radius: 10px; }
+.cert-qr small { display: block; font-size: 11px; color: var(--texto-2); margin-top: 4px; }
+.cert-codigo span { display: block; font-size: 12px; color: var(--texto-2); margin-bottom: 4px; }
+.cert-codigo code { font-size: 13px; word-break: break-all; }
+@media (max-width: 640px) { .cert-selo-linha { grid-template-columns: 1fr 1fr; } .cert-codigo { grid-column: 1 / -1; } .cert-selo svg { width: 100px; height: 100px; } }
+/* Sino ao lado do usuário (mesma linha) e barras dos relatórios em verde */
+#sessao.sessao { display: flex; align-items: center; gap: 8px; }
+.r5-grade .ranking-regioes .barra { background: var(--grad); }

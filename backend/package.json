@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "senhas": "node scripts/definir-senhas.js"
+    "senhas": "node scripts/definir-senhas.js",
+    "test": "node --test tests/api.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -15,5 +16,8 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.11.5"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

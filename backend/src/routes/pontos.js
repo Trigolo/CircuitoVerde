@@ -96,7 +96,9 @@ function validarPonto(b) {
     cep: soNumeros(e.cep), logradouro: String(e.logradouro || '').trim().slice(0, 150), numero: String(e.numero || '').trim().slice(0, 10),
     complemento: String(e.complemento || '').trim().slice(0, 60) || null, bairro: String(e.bairro || '').trim().slice(0, 80),
     cidade: String(e.cidade || '').trim().slice(0, 80), uf: String(e.uf || '').trim().toUpperCase(),
-    lat: Number(e.latitude), lng: Number(e.longitude),
+    // null ou vazio viraria 0 com Number(): trata como "não informado"
+    lat: e.latitude == null || e.latitude === '' ? NaN : Number(e.latitude),
+    lng: e.longitude == null || e.longitude === '' ? NaN : Number(e.longitude),
   };
   const faltando = [];
   if (d.nome.length < 3) faltando.push('nome do ponto');
