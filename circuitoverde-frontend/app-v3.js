@@ -204,6 +204,9 @@ const RECURSOS = [
   ['assistente', 'Assistente com IA', 'Tire dúvidas e consulte o sistema conversando com o assistente.', '#0EA5E9'],
 ];
 
+// Vídeo do pitch no YouTube (troque o código aqui se publicarem outra versão)
+const VIDEO_PITCH = 'tHIVXoYtGzE';
+
 async function inicio() {
   const [ind, pan, res] = await Promise.all([
     api('/indicadores').catch(() => null),
@@ -253,6 +256,18 @@ async function inicio() {
     </ol>
   </section>
 
+  <section class="secao video-pitch" data-revelar>
+    <div class="secao-titulo"><span class="sobre">Veja funcionando</span><h2>O CircuitoVerde em 4 minutos</h2></div>
+    <div class="video-moldura">
+      <button class="video-capa" id="h-video" aria-label="Assistir ao pitch do CircuitoVerde no YouTube">
+        <img src="https://i.ytimg.com/vi/${VIDEO_PITCH}/hqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">
+        <span class="video-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+        <span class="video-rotulo">Pitch da Squad 6 · do descarte ao certificado</span>
+      </button>
+    </div>
+    <p class="nota" style="text-align:center;margin-top:10px">Também no YouTube: <a href="https://youtu.be/${VIDEO_PITCH}" target="_blank" rel="noopener">youtu.be/${VIDEO_PITCH}</a></p>
+  </section>
+
   ${mundo ? `<section class="secao mundo-faixa" data-revelar>
     <div class="mundo-texto">
       <span class="sobre">Por que importa</span>
@@ -282,6 +297,9 @@ async function inicio() {
     <div class="fontes">Dados: Global E-waste Monitor 2020/2024 (ITU/UNITAR) e base pública de pontos de recebimento da ABREE.</div>
   </footer>`;
 
+  $('#h-video') && ($('#h-video').onclick = () => {
+    $('#h-video').outerHTML = `<iframe class="video-frame" src="https://www.youtube-nocookie.com/embed/${VIDEO_PITCH}?autoplay=1&rel=0" title="Pitch do CircuitoVerde" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+  });
   $('#h-pontos').onclick = () => ir('pontos');
   $('#h-painel').onclick = () => ir('painel');
   const abrirAssist = () => { const fab = $('#assist-fab'); if (fab) fab.click(); };

@@ -594,3 +594,15 @@ tr[hidden] { display: none; }
 /* Sino ao lado do usuário (mesma linha) e barras dos relatórios em verde */
 #sessao.sessao { display: flex; align-items: center; gap: 8px; }
 .r5-grade .ranking-regioes .barra { background: var(--grad); }
+
+/* Vídeo do pitch na página inicial (capa leve; o player do YouTube só carrega no clique) */
+.video-moldura { position: relative; max-width: 920px; margin: 0 auto; aspect-ratio: 16 / 9; border-radius: 22px; overflow: hidden; background: #060d1a; box-shadow: var(--sombra-forte); border: 1px solid var(--borda); }
+.video-capa { position: absolute; inset: 0; padding: 0; border: 0; cursor: pointer; background: #060d1a; }
+.video-capa img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .85; transition: transform .4s, opacity .3s; }
+.video-capa:hover img { transform: scale(1.03); opacity: 1; }
+.video-play { position: absolute; left: 50%; top: 50%; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); box-shadow: 0 10px 30px rgba(16, 185, 129, .45); transition: transform .2s; }
+.video-capa:hover .video-play { transform: scale(1.08); }
+.video-play svg { width: 34px; height: 34px; fill: #fff; margin-left: 4px; }
+.video-rotulo { position: absolute; left: 18px; bottom: 16px; padding: 7px 14px; border-radius: 999px; background: rgba(8, 16, 32, .78); color: #fff; font-weight: 700; font-size: 13px; }
+.video-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+@media (max-width: 560px) { .video-play { width: 64px; height: 64px; margin: -32px 0 0 -32px; } .video-rotulo { display: none; } }
