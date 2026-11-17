@@ -29,7 +29,7 @@ montarMenu = function () {
   const perfil = sessao?.usuario?.perfil;
   const operacao = perfil ? OPERACAO_POR_PERFIL[perfil] || [] : [];
   const ativo = (id) => (id === telaAtual ? 'ativo' : '');
-  const botao = (id, rotulo) => `<button class="nav-item ${ativo(id)}" data-tela="${id}" ${id === telaAtual ? 'aria-current="page"' : ''}>${icone(id)}<span>${rotulo}</span></button>`;
+  const botao = (id, rotulo) => `<button class="nav-item ${ativo(id)}" data-tela="${id}" title="${rotulo}" aria-label="${rotulo}" ${id === telaAtual ? 'aria-current="page"' : ''}>${icone(id)}<span>${rotulo}</span></button>`;
 
   // Topo: telas públicas + "Minha área" (menu suspenso) quando logado
   let html = TELAS_PUBLICAS.map((id) => botao(id, CURTOS[id] || TITULOS[id])).join('');
@@ -515,6 +515,219 @@ TELAS_EXTRAS.cadastro = async function cadastro() {
       botao.disabled = false; botao.textContent = 'Criar conta e entrar';
     }
   };
+};
+
+// ---------- 6b. Gestão de pontos de coleta (ADMIN aprova; RECICLADOR cadastra os dele) ----------
+OPERACAO_POR_PERFIL.ADMIN.push('gpontos');
+OPERACAO_POR_PERFIL.RECICLADOR.push('gpontos');
+Object.assign(TITULOS, { gpontos: 'Gerenciar pontos' });
+Object.assign(ICONES, { gpontos: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><path d="M12 7v5M9.5 9.5h5"/>' });
+// Modais comuns voltam à largura normal (o formulário de ponto usa uma caixa mais larga)
+const abrirModalBase = abrirModal;
+abrirModal = (html) => { $('#modal .modal-caixa')?.classList.remove('modal-larga'); abrirModalBase(html); };
+const STATUS_PONTO = { PENDENTE: ['Aguardando aprovação', 'pendente'], APROVADO: ['Publicado', 'pronto'], REJEITADO: ['Rejeitado', 'rejeitado'] };
+const CATEGORIAS_PONTO = { ...NOMES_CATEGORIA, OUTRO: 'Outros' };
+
+TELAS_EXTRAS.gpontos = async function gpontos() {
+  const ehAdmin = sessao.usuario.perfil === 'ADMIN';
+  let filtro = ehAdmin ? 'PENDENTE' : '';
+  let busca = '';
+  let mostrar = 25;
+  let dados = await api('/pontos/gestao');
+
+  const conta = (st) => (dados.contagem.find((c) => c.status === st) || { total: 0 }).total;
+  const inativos = () => dados.pontos.filter((p) => !p.ativo).length;
+  if (ehAdmin && !conta('PENDENTE')) filtro = '';
+
+  $('#conteudo').innerHTML = `
+    <div class="cabecalho">
+      <div><h1>${ehAdmin ? 'Gestão de pontos de coleta' : 'Meus pontos de coleta'}</h1>
+      <p class="sub">${ehAdmin
+        ? 'Aprove os pontos enviados pelos recicladores, cadastre novos e mantenha o mapa público em dia.'
+        : 'Cadastre os locais onde você recebe eletrônicos. Eles aparecem no mapa público depois da aprovação do administrador.'}</p></div>
+      <button class="btn" id="gp-novo">${icone('novo')} Novo ponto</button>
+    </div>
+    <div class="m-resumo" id="gp-resumo"></div>
+    <div class="cartao barra-filtros" style="margin-bottom:18px">
+      <div class="segmentado" id="gp-filtro" role="tablist" aria-label="Filtrar por status"></div>
+      ${campoBusca('gp-busca', 'Buscar por nome, cidade ou UF')}
+    </div>
+    <div class="cartao" id="gp-lista"></div>`;
+
+  function resumo() {
+    const kpi = (rot, v, cls = '') => `<div class="cartao kpi"><span class="rotulo">${rot}</span><span class="valor ${cls}">${num(v)}</span></div>`;
+    $('#gp-resumo').innerHTML = kpi('Aguardando aprovação', conta('PENDENTE'), conta('PENDENTE') ? 'gp-alerta' : '')
+      + kpi('Publicados', conta('APROVADO')) + kpi('Rejeitados', conta('REJEITADO')) + kpi('Desativados', inativos());
+    const abas = [['', 'Todos'], ['PENDENTE', `Pendentes${conta('PENDENTE') ? ` <small>${conta('PENDENTE')}</small>` : ''}`], ['APROVADO', 'Publicados'], ['REJEITADO', 'Rejeitados'], ['INATIVO', 'Desativados']];
+    $('#gp-filtro').innerHTML = abas.map(([v, r]) => `<button type="button" role="tab" data-f="${v}" class="${v === filtro ? 'ativo' : ''}" aria-selected="${v === filtro}">${r}</button>`).join('');
+    document.querySelectorAll('#gp-filtro button').forEach((b) => (b.onclick = () => { filtro = b.dataset.f; mostrar = 25; resumo(); lista(); }));
+  }
+
+  function lista() {
+    const termos = semAcento(busca).split(/\s+/).filter(Boolean);
+    const itens = dados.pontos.filter((p) => (filtro === 'INATIVO' ? !p.ativo : (!filtro || p.status === filtro)))
+      .filter((p) => { const t = semAcento(`${p.nome} ${p.cidade} ${p.uf} ${p.canal} ${p.reciclador || ''}`); return termos.every((x) => t.includes(x)); });
+    $('#gp-busca-conta').textContent = busca ? `${itens.length} encontrado(s)` : '';
+    if (!itens.length) {
+      $('#gp-lista').innerHTML = `<p class="vazio">${filtro === 'PENDENTE' ? 'Nenhum ponto aguardando aprovação.' : ehAdmin ? 'Nenhum ponto neste filtro.' : 'Você ainda não cadastrou pontos. Clique em "Novo ponto".'}</p>`;
+      return;
+    }
+    const linha = (p) => {
+      const [rot, cls] = STATUS_PONTO[p.status] || [p.status, 'concluido'];
+      const cats = String(p.categorias || '').split(',').filter(Boolean).map((c) => `<span class="gp-cat">${esc(CATEGORIAS_PONTO[c] || c)}</span>`).join('');
+      const acoes = [];
+      if (ehAdmin && p.status !== 'APROVADO') acoes.push(`<button class="btn peq" data-aprovar="${p.id_ponto}">Aprovar</button>`);
+      if (ehAdmin && p.status === 'PENDENTE') acoes.push(`<button class="btn peq sec" data-rejeitar="${p.id_ponto}">Rejeitar</button>`);
+      acoes.push(`<button class="btn peq sec" data-editar="${p.id_ponto}">Editar</button>`);
+      acoes.push(`<button class="btn peq sec" data-ativo="${p.id_ponto}" data-valor="${p.ativo ? 0 : 1}">${p.ativo ? 'Desativar' : 'Reativar'}</button>`);
+      acoes.push(`<button class="btn peq sec" data-hist="${p.id_ponto}" title="Histórico de status">Histórico</button>`);
+      return `<tr class="${p.ativo ? '' : 'gp-inativo'}">
+        <td><b>${esc(p.nome)}</b><br><small style="color:var(--texto-2)">${esc(p.cidade)}/${esc(p.uf)} · ${esc(p.canal)}${ehAdmin && p.reciclador ? ` · ${esc(p.reciclador)}` : ''}</small></td>
+        <td><div class="gp-cats">${cats}</div></td>
+        <td><span class="etapa etapa-${cls}">${rot}</span>${p.ativo ? '' : ' <span class="etapa etapa-concluido">Desativado</span>'}
+          ${p.status === 'REJEITADO' && p.motivo_rejeicao ? `<br><small class="gp-motivo">Motivo: ${esc(p.motivo_rejeicao)}</small>` : ''}</td>
+        <td class="acoes">${acoes.join('')}</td>
+      </tr>`;
+    };
+    $('#gp-lista').innerHTML = `<table><tr><th>Ponto</th><th>Recebe</th><th>Situação</th><th>Ações</th></tr>
+      ${itens.slice(0, mostrar).map(linha).join('')}</table>
+      ${itens.length > mostrar ? `<div style="text-align:center;margin-top:14px"><button class="btn sec" id="gp-mais">Mostrar mais (${itens.length - mostrar} restantes)</button></div>` : ''}`;
+    $('#gp-mais') && ($('#gp-mais').onclick = () => { mostrar += 50; lista(); });
+    const acharPonto = (id) => dados.pontos.find((p) => p.id_ponto === Number(id));
+    document.querySelectorAll('[data-aprovar]').forEach((b) => (b.onclick = () => mudar(`/pontos/${b.dataset.aprovar}/status`, { status: 'APROVADO' }, 'Ponto aprovado e publicado no mapa.')));
+    document.querySelectorAll('[data-rejeitar]').forEach((b) => (b.onclick = () => rejeitar(acharPonto(b.dataset.rejeitar))));
+    document.querySelectorAll('[data-editar]').forEach((b) => (b.onclick = () => formularioPonto(acharPonto(b.dataset.editar))));
+    document.querySelectorAll('[data-ativo]').forEach((b) => (b.onclick = () => mudar(`/pontos/${b.dataset.ativo}/ativo`, { ativo: b.dataset.valor === '1' },
+      b.dataset.valor === '1' ? 'Ponto reativado.' : 'Ponto desativado. Ele saiu do mapa público.')));
+    document.querySelectorAll('[data-hist]').forEach((b) => (b.onclick = () => historico(acharPonto(b.dataset.hist))));
+  }
+
+  async function recarregar() { dados = await api('/pontos/gestao'); resumo(); lista(); }
+  async function mudar(url, corpo, msg) {
+    try { await api(url, { metodo: 'PATCH', corpo }); fecharModal(); avisar(msg); await recarregar(); }
+    catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); }
+  }
+  function rejeitar(p) {
+    abrirModal(`<h2>Rejeitar "${esc(p.nome)}"</h2>
+      <p class="sub">O reciclador vê o motivo e pode corrigir o cadastro e enviar de novo.</p>
+      <form id="f-rejeitar"><label>Motivo <textarea name="motivo" rows="3" required minlength="5" maxlength="200" placeholder="Ex.: endereço não confere com o CNPJ"></textarea></label>
+      <div class="acoes"><button class="btn">Rejeitar ponto</button></div></form>`);
+    $('#f-rejeitar').onsubmit = (e) => { e.preventDefault(); if (!e.target.reportValidity()) return;
+      mudar(`/pontos/${p.id_ponto}/status`, { status: 'REJEITADO', motivo: new FormData(e.target).get('motivo') }, 'Ponto rejeitado.'); };
+  }
+  async function historico(p) {
+    const h = await api(`/pontos/${p.id_ponto}/historico`);
+    const nome = (x) => (x.ativo ? (STATUS_PONTO[x.status] || [x.status])[0] : 'Desativado');
+    abrirModal(`<h2>Histórico · ${esc(p.nome)}</h2>
+      <p class="sub">Gravado automaticamente pelo banco (trigger trg_ponto_au).</p>
+      ${h.length ? `<ol class="gp-hist">${h.map((x) => `<li><b>${esc(nome(x))}</b><span>${dataBR(String(x.data_hora).slice(0, 16))}</span>${x.motivo ? `<small>${esc(x.motivo)}</small>` : ''}</li>`).join('')}</ol>`
+        : '<p class="vazio">Este ponto veio da carga inicial, antes do histórico existir.</p>'}`);
+  }
+
+  // Formulário de cadastro/edição com mapa para marcar o local exato
+  function formularioPonto(p) {
+    const e = p || {};
+    const cats = new Set(String(e.categorias || '').split(',').filter(Boolean));
+    abrirModal(`<h2>${p ? 'Editar ponto' : 'Novo ponto de coleta'}</h2>
+      ${!ehAdmin ? `<p class="sub">${p ? 'Ao salvar, o ponto volta para aprovação do administrador.' : 'Depois de enviado, o administrador confere e publica no mapa.'}</p>` : ''}
+      <form id="f-ponto" novalidate class="gp-form">
+        <div class="linha">
+          <label>Nome do ponto <input name="nome" required minlength="3" maxlength="120" value="${esc(e.nome || '')}" placeholder="Ex.: Recicla Sul - Unidade Centro"></label>
+          <label>Tipo de local <select name="canal" required>${dados.canais.map((c) => `<option ${c === (e.canal || 'Reciclador') ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+        </div>
+        <div class="linha">
+          <label>Telefone (opcional) <input name="telefone" type="tel" inputmode="tel" maxlength="16" value="${esc(e.telefone || '')}" placeholder="(41) 3333-0000"></label>
+          <label>Horário (opcional) <input name="horario" maxlength="120" value="${esc(e.horario || '')}" placeholder="Seg a sex, 8h às 18h"></label>
+        </div>
+        <fieldset><legend>Recebe</legend><div class="gp-checks">${Object.entries(CATEGORIAS_PONTO).map(([k, v]) =>
+          `<label class="gp-check"><input type="checkbox" name="cat" value="${k}" ${cats.has(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div></fieldset>
+        <fieldset><legend>Endereço</legend>
+          <div class="linha">
+            <label>CEP <input name="cep" inputmode="numeric" required placeholder="00000-000" value="${esc(e.cep || '')}"><small class="nota" id="gp-cep-dica">Preenchemos a rua pelo CEP.</small></label>
+            <label>Número <input name="numero" required maxlength="10" value="${esc(e.numero || '')}"></label>
+            <label>Complemento <input name="complemento" maxlength="60" value="${esc(e.complemento || '')}"></label>
+          </div>
+          <div class="linha">
+            <label>Rua <input name="logradouro" required maxlength="150" value="${esc(e.logradouro || '')}"></label>
+            <label>Bairro <input name="bairro" required maxlength="80" value="${esc(e.bairro || '')}"></label>
+          </div>
+          <div class="linha">
+            <label>Cidade <input name="cidade" required maxlength="80" value="${esc(e.cidade || '')}"></label>
+            <label>UF <input name="uf" required maxlength="2" value="${esc(e.uf || '')}" placeholder="PR"></label>
+          </div>
+        </fieldset>
+        <fieldset><legend>Localização no mapa</legend>
+          <p class="nota" id="gp-mapa-dica">Clique no mapa para marcar o local, ou use "Localizar pelo endereço". Você pode arrastar o marcador.</p>
+          <div id="gp-mapa"></div>
+          <div class="acoes" style="margin-top:8px"><button type="button" class="btn sec peq" id="gp-localizar">Localizar pelo endereço</button>
+            <small class="nota" id="gp-coord"></small></div>
+        </fieldset>
+        <div class="acoes"><button class="btn btn-grande" id="gp-salvar">${p ? 'Salvar alterações' : ehAdmin ? 'Cadastrar e publicar' : 'Enviar para aprovação'}</button></div>
+      </form>`);
+    $('#modal .modal-caixa')?.classList.add('modal-larga');
+
+    const f = $('#f-ponto');
+    let coord = e.latitude != null ? [Number(e.latitude), Number(e.longitude)] : null;
+    const mapa = L.map('gp-mapa', { zoomControl: true }).setView(coord || [-14.5, -52], coord ? 16 : 4);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(mapa);
+    let marcador = null;
+    const marcar = (lat, lng, zoom) => {
+      coord = [Number(lat.toFixed(6)), Number(lng.toFixed(6))];
+      if (!marcador) { marcador = L.marker(coord, { draggable: true, icon: L.divIcon({ className: 'gp-pino', html: '<span></span>', iconSize: [28, 38], iconAnchor: [14, 36] }) }).addTo(mapa); marcador.on('dragend', () => { const ll = marcador.getLatLng(); marcar(ll.lat, ll.lng); }); }
+      else marcador.setLatLng(coord);
+      if (zoom) mapa.setView(coord, zoom);
+      $('#gp-coord').textContent = `Lat ${coord[0]} · Lng ${coord[1]}`;
+    };
+    if (coord) marcar(coord[0], coord[1]);
+    mapa.on('click', (ev) => marcar(ev.latlng.lat, ev.latlng.lng));
+    setTimeout(() => mapa.invalidateSize(), 80);
+
+    f.cep.addEventListener('input', () => { f.cep.value = soDigitos(f.cep.value).slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2'); });
+    f.uf.addEventListener('input', () => { f.uf.value = f.uf.value.replace(/[^a-z]/gi, '').toUpperCase(); });
+    f.cep.addEventListener('blur', async () => {
+      const cep = soDigitos(f.cep.value); if (cep.length !== 8) return;
+      $('#gp-cep-dica').textContent = 'Buscando...';
+      try {
+        const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then((x) => x.json()); if (r.erro) throw new Error();
+        f.logradouro.value = r.logradouro || f.logradouro.value; f.bairro.value = r.bairro || f.bairro.value; f.cidade.value = r.localidade || ''; f.uf.value = r.uf || '';
+        $('#gp-cep-dica').textContent = 'Endereço encontrado. Informe o número e localize no mapa.'; f.numero.focus();
+      } catch { $('#gp-cep-dica').textContent = 'CEP não encontrado. Preencha à mão.'; }
+    });
+    // Geocodificação pelo OpenStreetMap (Nominatim); se não achar o número, tenta só rua e cidade
+    $('#gp-localizar').onclick = async () => {
+      const b = $('#gp-localizar'); b.disabled = true; b.textContent = 'Localizando...';
+      const q = (partes) => fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=' + encodeURIComponent(partes.filter(Boolean).join(', '))).then((r) => r.json());
+      try {
+        let r = await q([`${f.logradouro.value} ${f.numero.value}`, f.cidade.value, f.uf.value]);
+        if (!r.length) r = await q([f.logradouro.value, f.cidade.value, f.uf.value]);
+        if (!r.length) r = await q([f.cidade.value, f.uf.value]);
+        if (!r.length) throw new Error();
+        marcar(Number(r[0].lat), Number(r[0].lon), 17);
+        $('#gp-mapa-dica').textContent = 'Confira o marcador. Se não estiver no lugar exato, arraste ou clique no ponto certo.';
+      } catch { $('#gp-mapa-dica').textContent = 'Não encontramos esse endereço. Clique no mapa para marcar o local.'; }
+      b.disabled = false; b.textContent = 'Localizar pelo endereço';
+    };
+
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      if (!f.reportValidity()) return;
+      const categorias = [...f.querySelectorAll('[name=cat]:checked')].map((c) => c.value);
+      if (!categorias.length) return avisar('Marque pelo menos um tipo de material que o ponto recebe.', true);
+      if (!coord) return avisar('Marque o local no mapa (clique no mapa ou use "Localizar pelo endereço").', true);
+      const v = Object.fromEntries(new FormData(f));
+      const corpo = { nome: v.nome, canal: v.canal, telefone: v.telefone, horario: v.horario, categorias,
+        endereco: { cep: v.cep, logradouro: v.logradouro, numero: v.numero, complemento: v.complemento, bairro: v.bairro, cidade: v.cidade, uf: v.uf, latitude: coord[0], longitude: coord[1] } };
+      const botao = $('#gp-salvar'); botao.disabled = true;
+      try {
+        const r = await api(p ? `/pontos/${p.id_ponto}` : '/pontos', { metodo: p ? 'PUT' : 'POST', corpo });
+        fecharModal(); avisar(r.mensagem); filtro = ''; await recarregar();
+      } catch (err) { if (!(err instanceof TelaTrocada)) avisar(err.message, true); botao.disabled = false; }
+    };
+  }
+
+  $('#gp-novo').onclick = () => formularioPonto(null);
+  $('#gp-busca').addEventListener('input', (e) => { busca = e.target.value; mostrar = 25; lista(); });
+  resumo(); lista();
 };
 
 // ---------- 7. Início ----------

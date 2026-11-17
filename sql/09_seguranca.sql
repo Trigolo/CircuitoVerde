@@ -37,6 +37,7 @@ GRANT INSERT ON circuitoverde.gerador             TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.transportador       TO 'cv_papel_app';   -- cadastro de transportador
 GRANT INSERT ON circuitoverde.reciclador          TO 'cv_papel_app';   -- cadastro de reciclador
 GRANT INSERT ON circuitoverde.reciclador_material TO 'cv_papel_app';
+-- Cadastro de pontos de coleta (13_gestao_pontos.sql). Ignorado se o 13 ainda não rodou.
 GRANT INSERT ON circuitoverde.item_eletronico     TO 'cv_papel_app';
 GRANT INSERT, UPDATE ON circuitoverde.logistica_reversa TO 'cv_papel_app';
 GRANT INSERT ON circuitoverde.componente          TO 'cv_papel_app';
@@ -76,6 +77,10 @@ DELIMITER ;
 CALL sp_grant_se_existir('assistente_conversa',       'GRANT INSERT ON circuitoverde.assistente_conversa TO ''cv_papel_app''');
 CALL sp_grant_se_existir('vw_assistente_uso',         'GRANT SELECT ON circuitoverde.vw_assistente_uso TO ''cv_papel_relatorio''');
 CALL sp_grant_se_existir('vw_assistente_ferramentas', 'GRANT SELECT ON circuitoverde.vw_assistente_ferramentas TO ''cv_papel_relatorio''');
+CALL sp_grant_se_existir('ponto_coleta_historico',    'GRANT INSERT, UPDATE ON circuitoverde.ponto_coleta TO ''cv_papel_app''');
+CALL sp_grant_se_existir('ponto_coleta_historico',    'GRANT INSERT, DELETE ON circuitoverde.ponto_coleta_categoria TO ''cv_papel_app''');
+CALL sp_grant_se_existir('ponto_coleta_historico',    'GRANT UPDATE ON circuitoverde.endereco TO ''cv_papel_app''');
+CALL sp_grant_se_existir('vw_gestao_pontos',          'GRANT SELECT ON circuitoverde.vw_gestao_pontos TO ''cv_papel_auditor''');
 DROP PROCEDURE sp_grant_se_existir;
 
 -- ---------- 3. Auditoria (leitura total, nenhuma escrita) ----------

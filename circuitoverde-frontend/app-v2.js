@@ -52,11 +52,12 @@ async function carregarMundo() {
 }
 
 async function panorama() {
-  const [dados, mundo] = await Promise.all([api('/panorama'), carregarMundo()]);
+  const [dados, mundo, pontosMapa] = await Promise.all([api('/panorama'), carregarMundo(), api('/pontos/mapa').catch(() => [])]);
   const anos = dados.anos.map((a) => a.ano);
   let ano = anos.includes(2022) ? 2022 : anos[anos.length - 1];
   const porAno = Object.fromEntries(dados.anos.map((a) => [a.ano, a]));
   const semDestino = (r) => Number(r.sem_destino_mt);
+  const pctSem = (r) => 100 - Number(r.taxa_coleta);
 
   $('#conteudo').innerHTML = `
     <div class="cabecalho">
@@ -64,16 +65,33 @@ async function panorama() {
         <h1>Descarte inadequado de lixo eletrônico no mundo</h1>
         <p class="sub">Volume que <b>não</b> foi coletado e reciclado de forma documentada (dados da ONU, tabela indicador_ewaste).</p>
       </div>
-      <div class="segmentado" id="anos">${anos.map((a) => `<button data-ano="${a}" class="${a === ano ? 'ativo' : ''}">${a}${porAno[a].estimativa ? '<small>est.</small>' : ''}</button>`).join('')}</div>
     </div>
     <div class="dash">
-      <div class="cartao c8 globo-card" id="globo-card">
-        <svg id="globo" aria-label="Globo interativo com o descarte inadequado por região"></svg>
+      <div class="cartao c8 globo-card globo-v2" id="globo-card">
+        <svg id="globo" aria-label="Globo interativo com o descarte inadequado por região e os pontos de coleta"></svg>
+        <div class="globo-ano" id="g-ano" aria-live="polite"></div>
         <div class="globo-dica">Arraste para girar · Ctrl + roda para zoom</div>
-        <div class="globo-legenda"><div>% sem destinação documentada</div><div class="esc"></div>
+        <div class="globo-legenda">
+          <div>% sem destinação documentada</div><div class="esc"></div>
           <div class="lim"><span>40%</span><span>70%</span><span>100%</span></div>
-          <div style="margin-top:6px"><span style="color:#FF6B5E">●</span> tamanho = toneladas sem destino &nbsp; <span style="color:#3DDC97">●</span> Brasil</div></div>
-        <div class="globo-controles"><button id="g-girar" title="Pausar ou continuar o giro">❚❚</button><button id="g-mais" title="Aproximar">+</button><button id="g-menos" title="Afastar">−</button></div>
+          <div class="leg-itens">
+            <span><i class="leg-bolha"></i> toneladas sem destino</span>
+            <span><i class="leg-ponto"></i> ${num(pontosMapa.length)} pontos de coleta</span>
+            <span><i class="leg-noite"></i> noite agora</span>
+          </div>
+        </div>
+        <div class="globo-controles">
+          <button id="g-brasil" class="g-texto" title="Aproximar dos pontos de coleta no Brasil">Pontos no Brasil</button>
+          <button id="g-girar" title="Pausar ou continuar o giro">❚❚</button>
+          <button id="g-mais" title="Aproximar">+</button><button id="g-menos" title="Afastar">−</button>
+        </div>
+        <div class="linha-tempo" id="linha-tempo">
+          <button id="lt-play" class="lt-play" aria-label="Animar os anos">▶</button>
+          <div class="lt-trilho">
+            <input type="range" id="lt-ano" min="0" max="${anos.length - 1}" step="1" value="${anos.indexOf(ano)}" aria-label="Ano">
+            <div class="lt-marcas">${anos.map((a) => `<button data-ano="${a}">${a}${porAno[a].estimativa ? '<small> est.</small>' : ''}</button>`).join('')}</div>
+          </div>
+        </div>
       </div>
       <div class="c4" style="display:flex;flex-direction:column;gap:16px">
         <div class="grade" style="grid-template-columns:1fr 1fr">
@@ -96,7 +114,7 @@ async function panorama() {
         <h2>Brasil</h2>
         <p class="legenda-card">Global E-waste Statistics Partnership, ano de 2022</p>
         <div class="calc-total" id="br"></div>
-        <p class="nota">Fontes: Global E-waste Monitor 2020 e 2024 (ITU/UNITAR). Os totais de 2022 por região foram calculados com kg por habitante × população, porque o relatório publica só o valor por habitante.</p>
+        <p class="nota">Fontes: Global E-waste Monitor 2020 e 2024 (ITU/UNITAR). Os totais de 2022 por região foram calculados com kg por habitante × população, porque o relatório publica só o valor por habitante. Os países são pintados pelo dado da região; o Brasil, pelo dado do próprio país.</p>
       </div>
     </div>`;
 
@@ -116,43 +134,109 @@ async function panorama() {
     <div><span>Coletado formalmente</span><b>${fmt1(br.taxa_coleta)}%</b></div>
     <div><span>Sem destino documentado</span><b style="color:var(--erro)">${fmt1(br.sem_destino_mt, 2)} mi t</b></div>` : '<p class="vazio">Sem dados do Brasil.</p>';
 
-  // --- globo (D3, projeção ortográfica) ---
+  // ---------------------------------------------------------------
+  // Globo (D3, projeção ortográfica) com atmosfera, luz, noite e pontos
+  // ---------------------------------------------------------------
   const svg = d3.select('#globo');
   const card = $('#globo-card');
   const proj = d3.geoOrthographic().clipAngle(90).rotate([40, -15]);
   const caminho = d3.geoPath(proj);
   const defs = svg.append('defs');
-  const mar = defs.append('radialGradient').attr('id', 'mar').attr('cx', '40%').attr('cy', '35%');
-  mar.append('stop').attr('offset', '0%').attr('stop-color', '#1E3A5F');
-  mar.append('stop').attr('offset', '100%').attr('stop-color', '#0D1B2E');
-  const gMar = svg.append('path').datum({ type: 'Sphere' }).attr('class', 'oceano');
+  const gradiente = (id, stops, attrs = {}) => {
+    const g = defs.append('radialGradient').attr('id', id);
+    Object.entries(attrs).forEach(([k, v]) => g.attr(k, v));
+    stops.forEach(([o, c, a = 1]) => g.append('stop').attr('offset', o).attr('stop-color', c).attr('stop-opacity', a));
+  };
+  gradiente('g-atmos', [['0%', '#4FA8FF', 0], ['86%', '#4FA8FF', 0], ['90%', '#5EB8FF', 0.55], ['100%', '#5EB8FF', 0]]);
+  gradiente('g-mar', [['0%', '#2E6FB5'], ['45%', '#163E70'], ['100%', '#06142B']], { cx: '35%', cy: '30%', r: '75%' });
+  gradiente('g-brilho', [['0%', '#FFFFFF', 0.28], ['35%', '#FFFFFF', 0.06], ['100%', '#FFFFFF', 0]], { cx: '32%', cy: '26%', r: '55%' });
+  gradiente('g-borda', [['0%', '#000', 0], ['70%', '#000', 0], ['100%', '#000', 0.5]]);
+  const fNoite = defs.append('filter').attr('id', 'f-noite').attr('x', '-20%').attr('y', '-20%').attr('width', '140%').attr('height', '140%');
+  fNoite.append('feGaussianBlur').attr('stdDeviation', 7);
+  const fLuz = defs.append('filter').attr('id', 'f-luz').attr('x', '-200%').attr('y', '-200%').attr('width', '500%').attr('height', '500%');
+  fLuz.append('feGaussianBlur').attr('stdDeviation', 1.6).attr('result', 'b');
+  const merge = fLuz.append('feMerge'); merge.append('feMergeNode').attr('in', 'b'); merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  const gAtmos = svg.append('circle').attr('class', 'atmosfera').attr('fill', 'url(#g-atmos)');
+  const gMar = svg.append('path').datum({ type: 'Sphere' }).attr('class', 'oceano').attr('fill', 'url(#g-mar)');
   const gGrat = svg.append('path').datum(d3.geoGraticule10()).attr('class', 'grat');
   const paises = topojson.feature(mundo.topo, mundo.topo.objects.countries).features.filter((f) => f.id !== '010');
   const idPais = (f) => f.id || f.properties.name;
-  const gPaises = svg.append('g').selectAll('path').data(paises).join('path').attr('class', 'pais');
+  const gPaises = svg.append('g').selectAll('path').data(paises).join('path').attr('class', 'pais')
+    .on('pointerenter', function () { d3.select(this).classed('foco', true).raise(); })
+    .on('pointerleave', function () { d3.select(this).classed('foco', false); });
+  const gNoite = svg.append('path').attr('class', 'noite').attr('filter', 'url(#f-noite)');
+  svg.append('path').datum({ type: 'Sphere' }).attr('class', 'sombra-borda').attr('fill', 'url(#g-borda)');
+  svg.append('path').datum({ type: 'Sphere' }).attr('class', 'brilho').attr('fill', 'url(#g-brilho)');
   svg.append('path').datum({ type: 'Sphere' }).attr('class', 'borda-globo');
+  const gPontos = svg.append('g').attr('class', 'pontos-coleta').attr('filter', 'url(#f-luz)');
   const gBolhas = svg.append('g');
-  const cor = d3.scaleLinear().domain([40, 70, 100]).range(['#3A4A63', '#F79009', '#D92D20']).clamp(true);
+
+  // Cor: % sem destino documentado (verde-azulado = melhor, vermelho = pior)
+  const cor = d3.scaleLinear().domain([40, 62, 80, 100]).range(['#2DD4BF', '#FACC15', '#F97316', '#DC2626']).interpolate(d3.interpolateHcl).clamp(true);
   const maxSem = d3.max(dados.anos.flatMap((a) => a.regioes.map(semDestino)));
   let escala = 1, girando = true, W = 0, H = 0, R0 = 0;
 
-  const visivel = (lng, lat) => { const r = proj.rotate(); return d3.geoDistance([lng, lat], [-r[0], -r[1]]) < Math.PI / 2 - 0.05; };
-  const regDe = (nome) => porAno[ano].regioes.find((r) => r.local === nome);
+  // Valores mostrados agora (animam de um ano para o outro)
+  const clonar = (a) => ({ mundo: { ...a.mundo }, regioes: a.regioes.map((r) => ({ ...r })), paises: (a.paises || []).map((p) => ({ ...p })) });
+  let vis = clonar(porAno[ano]);
+
+  // Posição do Sol agora: a metade escura do globo é o círculo de 90° em volta do ponto oposto ao Sol
+  function antiSolar() {
+    const agora = new Date();
+    const inicioAno = Date.UTC(agora.getUTCFullYear(), 0, 0);
+    const dia = (agora - inicioAno) / 864e5;
+    const decl = -23.44 * Math.cos(((2 * Math.PI) / 365) * (dia + 10));
+    const horasUTC = agora.getUTCHours() + agora.getUTCMinutes() / 60;
+    const lngSol = (12 - horasUTC) * 15;
+    return [lngSol + 180, -decl];
+  }
+  const circuloNoite = d3.geoCircle().radius(90);
+
+  const visivel = (lng, lat) => { const r = proj.rotate(); return d3.geoDistance([lng, lat], [-r[0], -r[1]]) < Math.PI / 2 - 0.03; };
+  const regDe = (nome) => vis.regioes.find((r) => r.local === nome);
+  const paisDe = (nome) => vis.paises.find((p) => p.local === nome);
 
   function tamanho() {
-    W = card.clientWidth; H = svg.node().clientHeight; R0 = Math.min(W, H) / 2 - 30;
-    svg.attr('viewBox', `0 0 ${W} ${H}`); proj.translate([W / 2, H / 2]).scale(R0 * escala); desenhar();
+    // A linha do tempo ocupa a parte de baixo do cartão: o globo fica centralizado no espaço acima dela
+    const faixa = ($('#linha-tempo')?.offsetHeight || 0) + 24;
+    W = card.clientWidth; H = svg.node().clientHeight; R0 = Math.min(W, H - faixa) / 2 - 26;
+    svg.attr('viewBox', `0 0 ${W} ${H}`); proj.translate([W / 2, (H - faixa) / 2 + 6]).scale(R0 * escala); desenhar();
   }
   function dicaRegiao(r, pais) {
-    return `${fmt1(semDestino(r), 2)} Mt sem destino · ${fmt1(r.taxa_coleta)}% reciclado|${pais ? pais + ' · ' : ''}${r.local} · ${ano}${r.estimativa ? ' (est.)' : ''} · gerado ${fmt1(r.gerado_mt)} Mt`;
+    return `${fmt1(semDestino(r), 2)} Mt sem destino · ${fmt1(r.taxa_coleta)}% reciclado|${pais ? pais + ' · ' : ''}${r.local} · ${ano}${porAno[ano].estimativa ? ' (est.)' : ''} · gerado ${fmt1(r.gerado_mt)} Mt`;
   }
   function desenhar() {
-    gMar.attr('d', caminho); gGrat.attr('d', caminho); svg.select('.borda-globo').attr('d', caminho);
+    const [cx, cy] = proj.translate(), R = proj.scale();
+    gAtmos.attr('cx', cx).attr('cy', cy).attr('r', R * 1.12);
+    gMar.attr('d', caminho); gGrat.attr('d', caminho);
+    svg.selectAll('.sombra-borda, .brilho, .borda-globo').attr('d', caminho);
+    gNoite.attr('d', caminho(circuloNoite.center(antiSolar())()));
     gPaises.attr('d', caminho)
-      .attr('fill', (f) => { const m = mundo.regioes[idPais(f)]; const r = m && regDe(m[0]); return r ? cor(100 - r.taxa_coleta) : '#2B3A52'; })
-      .attr('data-dica', (f) => { const m = mundo.regioes[idPais(f)]; const r = m && regDe(m[0]); return r ? dicaRegiao(r, m[1]) : null; });
+      .attr('fill', (f) => {
+        const m = mundo.regioes[idPais(f)]; if (!m) return '#2B3A52';
+        const p = paisDe(m[1]); const r = p || regDe(m[0]);
+        return r ? cor(pctSem(r)) : '#2B3A52';
+      })
+      .attr('data-dica', (f) => {
+        const m = mundo.regioes[idPais(f)]; if (!m) return null;
+        const p = paisDe(m[1]);
+        if (p) return `${fmt1(p.gerado_mt * 1000, 0)} mil t geradas · ${fmt1(p.taxa_coleta)}% coletado|${m[1]} · dado do país · ${p.ano}`;
+        const r = regDe(m[0]); return r ? dicaRegiao(r, m[1]) : null;
+      });
+
+    // Pontos de coleta (só a face visível)
+    const tamPonto = Math.min(3.2, 1.3 * Math.sqrt(escala));
+    const pts = pontosMapa.filter((p) => visivel(Number(p.longitude), Number(p.latitude)));
+    gPontos.selectAll('circle').data(pts, (d) => d.id_ponto).join('circle')
+      .attr('r', tamPonto)
+      .attr('class', (d) => `pc pc-${d.origem}`)
+      .attr('cx', (d) => proj([d.longitude, d.latitude])[0]).attr('cy', (d) => proj([d.longitude, d.latitude])[1])
+      .attr('data-dica', (d) => `${d.nome}|${d.cidade}/${d.uf} · ponto de coleta`);
+
+    // Bolhas por região
     const rS = d3.scaleSqrt().domain([0, maxSem]).range([4, 58 * Math.sqrt(escala)]);
-    const itens = porAno[ano].regioes.filter((r) => visivel(r.longitude, r.latitude));
+    const itens = vis.regioes.filter((r) => visivel(r.longitude, r.latitude));
     const g = gBolhas.selectAll('g.b').data(itens, (d) => d.local).join((e) => {
       const n = e.append('g').attr('class', 'b');
       n.append('circle').attr('class', 'pulso'); n.append('circle').attr('class', 'bolha'); n.append('text').attr('class', 'rot').attr('text-anchor', 'middle');
@@ -162,38 +246,65 @@ async function panorama() {
     g.select('.bolha').attr('r', (d) => rS(semDestino(d))).attr('data-dica', (d) => dicaRegiao(d));
     g.select('.pulso').attr('r', (d) => rS(semDestino(d)));
     g.select('text').attr('dy', (d) => rS(semDestino(d)) + 15).text((d) => `${d.local} · ${fmt1(semDestino(d))} Mt`);
-    const brasil = (porAno[ano].paises || []).filter((p) => visivel(p.longitude, p.latitude));
-    gBolhas.selectAll('circle.br').data(brasil).join('circle').attr('class', 'br').attr('r', 6)
-      .attr('cx', (d) => proj([d.longitude, d.latitude])[0]).attr('cy', (d) => proj([d.longitude, d.latitude])[1])
-      .attr('data-dica', (d) => `${fmt1(d.gerado_mt * 1000, 0)} mil t geradas · ${fmt1(d.taxa_coleta)}% coletado|Brasil · ${d.ano}`)
-      .raise();
+    // Bolhas encolhem quando o zoom é grande, para não esconder os pontos do Brasil
+    gBolhas.attr('opacity', escala > 2.2 ? 0.35 : 1);
   }
-  function painelAno() {
-    const a = porAno[ano], m = a.mundo;
+  function numerosAno() {
+    const m = vis.mundo;
     $('#k-ger').innerHTML = `${fmt1(m.gerado_mt)}<span class="unidade">Mt</span>`;
-    $('#k-ger-d').textContent = `${a.estimativa ? 'estimativa ' : ''}em ${ano}`;
+    $('#k-ger-d').textContent = `${porAno[ano].estimativa ? 'estimativa ' : ''}em ${ano}`;
     $('#k-sem').innerHTML = `${fmt1(m.sem_destino_mt)}<span class="unidade">Mt</span>`;
     $('#k-sem-d').textContent = `${fmt1(100 - m.taxa_coleta)}% do total gerado`;
+    $('#g-ano').innerHTML = `${ano}${porAno[ano].estimativa ? '<small>estimativa</small>' : ''}`;
+  }
+  function rankingAno() {
+    const a = porAno[ano];
     $('#aviso-est').style.display = a.estimativa ? 'block' : 'none';
     const lista = [...a.regioes].sort((x, y) => semDestino(y) - semDestino(x));
     $('#rank-reg').innerHTML = lista.map((r) => `<div class="linha-reg" data-reg="${esc(r.local)}" tabindex="0">
       <span class="nome">${esc(r.local)}</span><div class="trilho"><div class="barra" style="width:${(semDestino(r) / maxSem) * 100}%"></div></div>
       <span class="num">${fmt1(semDestino(r))} Mt</span></div>`).join('');
-    document.querySelectorAll('[data-reg]').forEach((el) => (el.onclick = () => irPara(a.regioes.find((r) => r.local === el.dataset.reg))));
-    desenhar();
+    document.querySelectorAll('[data-reg]').forEach((el) => (el.onclick = () => { const r = a.regioes.find((x) => x.local === el.dataset.reg); irPara([r.longitude, r.latitude * 0.7]); }));
+    document.querySelectorAll('.lt-marcas button').forEach((b) => b.classList.toggle('ativo', Number(b.dataset.ano) === ano));
+    $('#lt-ano').value = anos.indexOf(ano);
   }
-  function irPara(r) {
+
+  // Troca de ano com animação: os números, as cores e as bolhas "crescem" até o valor do ano escolhido
+  let transicao = null;
+  function irParaAno(novo, duracao = 1100) {
+    if (!porAno[novo]) return;
+    ano = novo;
+    const de = clonar(vis), para = porAno[novo];
+    const campos = ['gerado_mt', 'taxa_coleta', 'sem_destino_mt'];
+    const mistura = (a, b, t) => { const o = { ...b }; campos.forEach((c) => { o[c] = Number(a?.[c] ?? b[c]) + (Number(b[c]) - Number(a?.[c] ?? b[c])) * t; }); return o; };
+    if (transicao) transicao.stop();
+    rankingAno();
+    if (reduzirMovimento || !duracao) { vis = clonar(para); numerosAno(); desenhar(); return; }
+    transicao = d3.timer((ms) => {
+      const t = d3.easeCubicInOut(Math.min(1, ms / duracao));
+      vis = {
+        mundo: mistura(de.mundo, para.mundo, t),
+        regioes: para.regioes.map((r) => mistura(de.regioes.find((x) => x.local === r.local), r, t)),
+        paises: (para.paises || []).map((p) => mistura(de.paises.find((x) => x.local === p.local), p, t)),
+      };
+      numerosAno(); desenhar();
+      if (t >= 1) { transicao.stop(); transicao = null; vis = clonar(para); numerosAno(); desenhar(); }
+    });
+  }
+
+  function irPara(alvo, novaEscala) {
     girando = false; atualizarBotao();
-    const de = proj.rotate(), para = [-r.longitude, -r.latitude * 0.7];
-    const it = d3.interpolate(de, para);
-    d3.transition().duration(1000).tween('girar', () => (t) => { proj.rotate(it(t)); desenhar(); });
+    const de = proj.rotate(), para = [-alvo[0], -alvo[1]];
+    const it = d3.interpolate(de, para), ie = d3.interpolate(escala, novaEscala ?? escala);
+    d3.transition().duration(1200).ease(d3.easeCubicInOut).tween('girar', () => (t) => { proj.rotate(it(t)); escala = ie(t); proj.scale(R0 * escala); desenhar(); });
   }
   const botaoGiro = $('#g-girar');
   const atualizarBotao = () => { botaoGiro.textContent = girando ? '❚❚' : '▶'; };
   botaoGiro.onclick = () => { girando = !girando; atualizarBotao(); };
-  const zoom = (f) => { escala = Math.max(0.7, Math.min(4, escala * f)); proj.scale(R0 * escala); desenhar(); };
+  const zoom = (f) => { escala = Math.max(0.7, Math.min(6, escala * f)); proj.scale(R0 * escala); desenhar(); };
   $('#g-mais').onclick = () => zoom(1.25);
   $('#g-menos').onclick = () => zoom(0.8);
+  $('#g-brasil').onclick = () => irPara([-51, -15], 3.4);
   svg.on('wheel', (ev) => { if (!ev.ctrlKey) return; ev.preventDefault(); zoom(ev.deltaY < 0 ? 1.1 : 0.9); }, { passive: false });   // zoom só com Ctrl, para não travar a rolagem
   let inicio;
   svg.call(d3.drag()
@@ -203,19 +314,29 @@ async function panorama() {
       proj.rotate([inicio.r[0] + (ev.x - inicio.x) * k, Math.max(-80, Math.min(80, inicio.r[1] - (ev.y - inicio.y) * k))]);
       desenhar();
     }));
-  document.querySelectorAll('#anos button').forEach((b) => (b.onclick = () => {
-    ano = Number(b.dataset.ano);
-    document.querySelectorAll('#anos button').forEach((x) => x.classList.toggle('ativo', x === b));
-    painelAno();
-  }));
+
+  // Linha do tempo: slider, marcas e botão de play
+  let tocando = null;
+  const pararAnimacao = () => { if (tocando) { clearInterval(tocando); tocando = null; } $('#lt-play').textContent = '▶'; $('#lt-play').setAttribute('aria-label', 'Animar os anos'); };
+  $('#lt-ano').oninput = (e) => { pararAnimacao(); irParaAno(anos[Number(e.target.value)]); };
+  document.querySelectorAll('.lt-marcas button').forEach((b) => (b.onclick = () => { pararAnimacao(); irParaAno(Number(b.dataset.ano)); }));
+  $('#lt-play').onclick = () => {
+    if (tocando) return pararAnimacao();
+    $('#lt-play').textContent = '❚❚'; $('#lt-play').setAttribute('aria-label', 'Pausar a animação');
+    let i = anos.indexOf(ano) >= anos.length - 1 ? 0 : anos.indexOf(ano) + 1;
+    if (anos.indexOf(ano) >= anos.length - 1) irParaAno(anos[0], 600);
+    const passo = () => { irParaAno(anos[i]); i += 1; if (i >= anos.length) { clearInterval(tocando); tocando = null; setTimeout(pararAnimacao, 1200); } };
+    if (anos.indexOf(ano) < anos.length - 1) passo();
+    tocando = setInterval(passo, 2200);
+  };
 
   const reduzirMovimento = matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduzirMovimento) { girando = false; atualizarBotao(); }
   const timer = d3.timer(() => { if (girando) { const r = proj.rotate(); proj.rotate([r[0] + 0.12, r[1]]); desenhar(); } });
   const aoRedimensionar = () => tamanho();
   addEventListener('resize', aoRedimensionar);
-  limparTela = () => { timer.stop(); removeEventListener('resize', aoRedimensionar); };
-  tamanho(); painelAno();
+  limparTela = () => { timer.stop(); if (transicao) transicao.stop(); pararAnimacao(); removeEventListener('resize', aoRedimensionar); };
+  tamanho(); numerosAno(); rankingAno(); desenhar();
 }
 
 // =====================================================================
@@ -311,6 +432,7 @@ async function pontosV2() {
     return `<div class="ponto-card" data-ponto="${p.id_ponto}" tabindex="0">
       <div class="topo"><b>${esc(p.nome)}</b><span class="dist">${distTexto(Number(p.distancia_km))}</span></div>
       <p>${enderecoTexto(p)}</p>
+      ${p.horario || p.telefone ? `<p class="nota" style="margin:0">${[p.horario && esc(p.horario), p.telefone && esc(p.telefone.replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3'))].filter(Boolean).join(' · ')}</p>` : ''}
       <div class="acoes" style="align-items:center">
         <span class="etiqueta ${esc(p.origem)}">${esc(NOMES_ORIGEM[p.origem] || p.origem)}</span>
         <span class="etiqueta">${esc(p.canal)}</span>

@@ -38,6 +38,7 @@ sql/
   10_indices.sql         índices compostos para as consultas mais usadas (com EXPLAIN)
   11_usuario_gustavo.sql login por nome de usuário e o usuário Gustavo em todos os perfis (senha Gustavo)
   12_demo_reciclador.sql  itens de demonstração do Gustavo em cada etapa da reciclagem (a caminho, sem componentes, sem destino, pronto para certificar)
+  13_gestao_pontos.sql    cadastro e aprovação de pontos de coleta: status (pendente/aprovado/rejeitado), histórico por trigger e view de gestão
   backup.bat             backup com mysqldump (dados, views, triggers e procedures)
   restaurar.bat          restaura um backup
 backend/
@@ -77,7 +78,7 @@ circuitoverde-frontend/
 
 ### Banco
 1. Abra o MySQL Workbench e conecte ao seu servidor MySQL 8.
-2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql`, `sql/09_seguranca.sql`, `sql/10_indices.sql`, `sql/11_usuario_gustavo.sql`, `sql/12_demo_reciclador.sql` e `sql/03_consultas.sql`.
+2. Execute, nesta ordem: `sql/01_schema.sql`, `sql/02_dados_teste.sql`, `sql/04_carga_massa.sql` (opcional, dados em massa), `sql/05_views_dashboard.sql`, `sql/06_estrutura_nova.sql`, `sql/07_carga_pontos_coleta.sql`, `sql/08_assistente.sql`, `sql/09_seguranca.sql`, `sql/10_indices.sql`, `sql/11_usuario_gustavo.sql`, `sql/12_demo_reciclador.sql`, `sql/13_gestao_pontos.sql` e `sql/03_consultas.sql`.
    Para entrar no site: usuário **Gustavo**, senha **Gustavo** e o perfil desejado.
 3. Troque as senhas dos usuários no fim do `09_seguranca.sql` e use o `cv_app` no `.env` da API (`DB_USER=cv_app`). Em desenvolvimento dá para continuar com o `root`.
 
@@ -164,3 +165,14 @@ Bibliotecas do frontend ficam na pasta `vendor` (D3, TopoJSON, Leaflet, qrcode-g
 - [x] Panorama global, calculadora, ranking e certificado com QR Code
 - [x] Assistente virtual com IA (Gemini) e bot por regras
 - [ ] Deploy na Oracle Cloud (OCI)
+
+## Gestão de pontos de coleta (versão 4)
+
+- **Reciclador:** em *Reciclagem → Gerenciar pontos*, cadastra os locais onde recebe eletrônicos (endereço pelo CEP, local marcado no mapa, materiais aceitos, horário e telefone). O ponto fica **Aguardando aprovação**.
+- **Admin:** em *Administração → Gerenciar pontos*, aprova ou rejeita (com motivo), cadastra pontos já publicados, edita e desativa.
+- Só pontos **aprovados e ativos** aparecem no mapa público (`vw_pontos_coleta`). Cada mudança de status é gravada em `ponto_coleta_historico` pelo trigger `trg_ponto_au`.
+- Rotas: `GET /api/pontos/gestao`, `POST /api/pontos`, `PUT /api/pontos/:id`, `PATCH /api/pontos/:id/status`, `PATCH /api/pontos/:id/ativo`, `GET /api/pontos/:id/historico` e `GET /api/pontos/mapa` (coordenadas para o globo).
+
+## Globo (tela Mundo)
+
+Atmosfera, iluminação e a **noite em tempo real** (calculada pela posição do Sol), países pintados pela % sem destino documentado (o Brasil pelo dado do próprio país), os pontos de coleta aprovados como luzes, botão **Pontos no Brasil** e **linha do tempo** com play que anima 2019 → 2022 → 2026 (estimativa).

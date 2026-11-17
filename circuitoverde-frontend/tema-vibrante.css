@@ -439,3 +439,90 @@ tr[hidden] { display: none; }
 .etapa-concluido { background: rgba(100, 116, 139, .15); color: var(--texto-2); }
 :root[data-tema="escuro"] .etapa-pendente { color: #FBBF24; }
 :root[data-tema="escuro"] .etapa-pronto { color: #34D399; }
+
+/* Gestão de pontos de coleta */
+.etapa-rejeitado { background: rgba(240, 68, 56, .14); color: #B42318; }
+:root[data-tema="escuro"] .etapa-rejeitado { color: #FDA29B; }
+.gp-alerta { color: #D97706; }
+.gp-cats { display: flex; flex-wrap: wrap; gap: 4px; max-width: 320px; }
+.gp-cat { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--superficie); border: 1px solid var(--borda); color: var(--texto-2); white-space: nowrap; }
+.gp-inativo td { opacity: .55; }
+.gp-motivo { color: var(--erro, #B42318); }
+.gp-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.gp-check { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--borda); border-radius: 12px; cursor: pointer; font-weight: 500; }
+.gp-check input { width: auto; margin: 0; accent-color: var(--acento, #10B981); }
+.gp-check:has(input:checked) { border-color: var(--acento, #10B981); background: rgba(16, 185, 129, .08); }
+#gp-mapa { height: 300px; border-radius: 14px; border: 1px solid var(--borda); z-index: 0; }
+.modal-caixa.modal-larga { width: min(860px, 100%); max-width: 860px; }
+.gp-form fieldset { margin-top: 12px; }
+.gp-hist { list-style: none; padding: 0; margin: 12px 0 0; border-left: 2px solid var(--borda); }
+.gp-hist li { position: relative; padding: 0 0 14px 18px; display: flex; flex-direction: column; gap: 2px; }
+.gp-hist li::before { content: ''; position: absolute; left: -7px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--acento, #10B981); }
+.gp-hist span { font-size: 12px; color: var(--texto-2); }
+#gp-filtro small { background: #F59E0B; color: #fff; border-radius: 999px; padding: 0 6px; margin-left: 4px; opacity: 1; }
+@media (max-width: 640px) { .gp-cats { max-width: none; } #gp-mapa { height: 240px; } }
+
+/* ---------- Globo v2: atmosfera, luz, noite, pontos e linha do tempo ---------- */
+.globo-v2 { background: radial-gradient(ellipse at 50% 40%, #0E1E3A 0%, #070F1F 60%, #040912 100%); }
+.globo-v2 svg { height: 600px; }
+.globo-v2 .oceano { fill: url(#g-mar); }
+.globo-v2 .pais { stroke: rgba(4, 12, 28, .7); stroke-width: .45; transition: filter .15s; }
+.globo-v2 .pais.foco { stroke: #fff; stroke-width: 1.4; filter: brightness(1.18); }
+.globo-v2 .grat { stroke: rgba(160, 200, 255, .07); }
+.globo-v2 .noite { fill: rgba(2, 6, 20, .5); pointer-events: none; }
+.globo-v2 .sombra-borda, .globo-v2 .brilho, .globo-v2 .atmosfera { pointer-events: none; }
+.globo-v2 .borda-globo { stroke: rgba(120, 190, 255, .45); stroke-width: 1; }
+.globo-v2 .pc { fill: #6EE7B7; stroke: #ECFDF5; stroke-width: .4; cursor: pointer; }
+.globo-v2 .pc-ABREE { fill: #34D399; }
+.globo-v2 .pc-FICTICIO { fill: #A7F3D0; }
+.globo-v2 .bolha { fill: rgba(239, 68, 68, .42); stroke: #FCA5A5; }
+.globo-v2 .pulso { stroke: #FCA5A5; }
+.globo-v2 .globo-legenda { top: 14px; bottom: auto; left: 16px; backdrop-filter: blur(6px); }
+.globo-v2 .globo-legenda .esc { background: linear-gradient(90deg, #2DD4BF, #FACC15 37%, #F97316 67%, #DC2626); }
+.leg-itens { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.leg-itens span { display: flex; align-items: center; gap: 6px; }
+.leg-itens i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.leg-bolha { background: rgba(239, 68, 68, .5); border: 1.5px solid #FCA5A5; }
+.leg-ponto { background: #34D399; box-shadow: 0 0 6px #34D399; width: 7px !important; height: 7px !important; margin: 0 1.5px; }
+.leg-noite { background: linear-gradient(90deg, #163E70 50%, #060F20 50%); border: 1px solid rgba(255, 255, 255, .25); }
+.globo-ano { position: absolute; right: 18px; top: 38px; color: #fff; font-size: 40px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; text-align: right; text-shadow: 0 2px 18px rgba(0, 0, 0, .6); pointer-events: none; }
+.globo-ano small { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0; color: #FCD34D; }
+.globo-v2 .globo-controles { bottom: auto; top: 96px; flex-direction: column; align-items: flex-end; }
+.globo-v2 .globo-controles > * { margin: 0; }
+.globo-v2 .globo-controles .g-texto { width: auto; padding: 0 12px; font-size: 13px; font-weight: 600; background: rgba(16, 185, 129, .25); border-color: rgba(52, 211, 153, .6); }
+.globo-v2 .globo-controles button:hover { background: rgba(255, 255, 255, .14); }
+.linha-tempo { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-radius: 16px; background: rgba(8, 16, 32, .72); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(8px); }
+.lt-play { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; cursor: pointer; color: #fff; font-size: 14px; background: linear-gradient(135deg, #10B981, #6366F1); box-shadow: 0 4px 14px rgba(16, 185, 129, .35); }
+.lt-trilho { flex: 1; min-width: 0; }
+.lt-trilho input[type=range] { width: 100%; margin: 0; accent-color: #34D399; cursor: pointer; }
+.lt-marcas { display: flex; justify-content: space-between; margin-top: 0; line-height: 1.2; }
+.lt-marcas button { background: none; border: 0; color: #94A3B8; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; padding: 2px 0; }
+.lt-marcas button.ativo { color: #fff; }
+.lt-marcas small { color: #FCD34D; font-weight: 500; }
+@media (max-width: 860px) {
+  .globo-v2 svg { height: 520px; }
+  .globo-v2 .globo-legenda { right: auto; max-width: 60%; font-size: 11px; }
+  .globo-v2 .globo-legenda .esc { width: 140px; }
+  .globo-ano { font-size: 28px; top: 14px; }
+  .globo-v2 .globo-dica { display: none; }
+  .globo-v2 .globo-controles { right: 10px; top: 60px; }
+  .globo-v2 .globo-controles .g-texto { font-size: 12px; padding: 0 8px; }
+}
+
+/* Marcador do mapa de cadastro (pino desenhado em CSS, sem depender de imagem) */
+.gp-pino span { position: absolute; left: 2px; top: 0; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: linear-gradient(135deg, #10B981, #6366F1); border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0, 0, 0, .35); }
+.gp-pino span::after { content: ''; position: absolute; left: 7px; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+.gp-pino { cursor: grab; }
+
+/* Menu do topo: logado, os itens públicos viram só ícones antes de encostar na marca */
+.nav-topo { justify-content: safe center; }
+@media (max-width: 1440px) {
+  .nav-topo:has(.nav-area) > .nav-item span { display: none; }
+  .nav-topo:has(.nav-area) > .nav-item { padding: 9px; }
+}
+/* Legenda do globo mais enxuta no celular */
+@media (max-width: 560px) {
+  .globo-v2 .leg-itens { display: none; }
+  .globo-v2 .globo-legenda { padding: 6px 8px; }
+}
